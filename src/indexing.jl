@@ -50,7 +50,7 @@ to_index(x::AbstractArray) = cu(x)
     quote
         i = (blockIdx().x-1) * blockDim().x + threadIdx().x
         i > length(dest) && return
-        is = ind2sub(idims, i)
+        is = ind2sub_(idims, i)
         @nexprs $N i -> @inbounds I_i = Is[i][is[i]]
         @inbounds dest[i] = @ncall $N getindex src i -> I_i
         return

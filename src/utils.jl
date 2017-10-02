@@ -1,4 +1,5 @@
 using Base.Cartesian
+using Base: @pure
 
 function cudims(n::Integer)
   threads = 256
@@ -7,8 +8,28 @@ end
 
 cudims(a::AbstractArray) = cudims(length(a))
 
-@inline ind2sub_(a::AbstractArray{T,0}, i) where T = ()
-@inline ind2sub_(a, i) = ind2sub(a, i)
+# ind2sub, but modified to
+#   (1) preserve types (for better register usage)
+#   (2) behave sensibly on 0D arrays
+
+@pure @inline _ind2sub_(::Tuple{}, ind::T) where {T} = (ind + T(1),)
+@pure @inline function _ind2sub_(indslast::NTuple{1}, ind::T) where T
+    ((ind + T(1)),)
+end
+@pure @inline function _ind2sub_(inds, ind::T) where T
+    r1 = inds[1]
+    indnext = div(ind, r1)
+    f = T(1); l = r1
+    (ind-l*indnext+f, _ind2sub_(Base.tail(inds), indnext)...)
+end
+
+@pure @inline function ind2sub_(dims::NTuple{N}, ind::T) where {N, T}
+    _ind2sub_(NTuple{N, T}(dims), ind - T(1))
+end
+@pure @inline function ind2sub_(A::AbstractArray, ind::T) where T
+    _ind2sub_(size(A), ind - T(1))
+end
+@pure @inline ind2sub_(a::AbstractArray{T,0}, i) where T = ()
 
 macro cuindex(A)
   quote
