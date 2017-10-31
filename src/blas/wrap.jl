@@ -890,7 +890,7 @@ for (fname, elty) in
                               cublasOperation_t, Cint, Cint, Cint, Ptr{$elty},
                               Ptr{$elty}, Cint, Ptr{$elty}, Cint, Ptr{$elty},
                               Ptr{$elty}, Cint), cublashandle[1], cutransA,
-                              cutransB, m, n, k, [alpha], A, lda, B, ldb, [beta],
+                              cutransB, m, n, k, &alpha, A, lda, B, ldb, &beta,
                               C, ldc))
             C
         end

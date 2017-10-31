@@ -13,28 +13,49 @@ for (bname, fname,elty) in ((:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :F
                 throw(DimensionMismatch("Cholesky factorization is only possible for square matrices!"))
             end
             lda     = max(1,stride(A,2))
-            bufSize = Array(Cint,1)
+            bufSize = Ref{Cint}()
             statuscheck(ccall(($(string(bname)),libcusolver), cusolverStatus_t,
                               (cusolverDnHandle_t, cublasFillMode_t, Cint,
                                Ptr{$elty}, Cint, Ptr{Cint}),
                               cusolverDnhandle[1], cuuplo, n, A, lda, bufSize))
 
-            buffer  = CuArray(zeros($elty,bufSize[1]))
-            devinfo = CuArray(zeros(Cint,1))
+            # buffer  = CuArray(zeros($elty,bufSize[]))
+            # devinfo = CuArray(zeros(Cint,1))
+            buffer  = CuArray{$elty,1}(bufSize[])
+            devinfo = CuArray{Cint,1}(1)
             statuscheck(ccall(($(string(fname)),libcusolver), cusolverStatus_t,
                               (cusolverDnHandle_t, cublasFillMode_t, Cint,
                                Ptr{$elty}, Cint, Ptr{$elty}, Cint, Ptr{Cint}),
                               cusolverDnhandle[1], cuuplo, n, A, lda, buffer,
-                              bufSize[1], devinfo))
+                              bufSize[], devinfo))
             info = collect(devinfo)
             if info[1] < 0
                 throw(ArgumentError("The $(-info[1])th parameter is wrong"))
-            elseif info[1] > 0
-                throw(Base.LinAlg.SingularException(info[1]))
             end
-            A
+            A, info[1]
         end
     end
+end
+
+function Base.LinAlg.cholfact!(A::Base.LinAlg.RealHermSymComplexHerm{T, CuMatrix{T}}) where {T<:Base.LinAlg.BlasReal}
+    C, info = potrf!(A.uplo, A.data)
+    # Base.LinAlg.Cholesky(C, A.uplo, info) This one is for Julia 0.7
+    Base.LinAlg.Cholesky(C, A.uplo)
+end
+import Base: \
+function (\)(A::CuMatrix{T}, B::CuVecOrMat{T}) where {T<:Real}
+    mA, nA = size(A)
+    mB, nB = size(B)
+
+    if mA != mB
+        throw(ArgumentError("number of rows must be the same"))
+    end
+
+    if mA <= nA
+        throw(ArgumentError("just and underdetermined system not implemented yet"))
+    end
+
+    return A_ldiv_B!(cholfact!(Symmetric(A'A)), A'B)
 end
 
 #getrf 
@@ -102,6 +123,9 @@ for (bname, fname,elty) in ((:cusolverDnSgeqrf_bufferSize, :cusolverDnSgeqrf, :F
         end
     end
 end
+
+# This doesn't work because the τ vector in base is not generic. Fix it on 0.7
+Base.LinAlg.qrfact!(A::CuMatrix{<:Base.LinAlg.BlasReal}) = Base.LinAlg.QR(geqrf!(A)...)
 
 #sytrf 
 for (bname, fname,elty) in ((:cusolverDnSsytrf_bufferSize, :cusolverDnSsytrf, :Float32),
@@ -177,6 +201,9 @@ for (fname,elty) in ((:cusolverDnSpotrs, :Float32),
         end
     end
 end
+
+Base.LinAlg.A_ldiv_B!(F::Base.LinAlg.Cholesky{T,CuMatrix{T}}, B::CuVecOrMat{T}) where {T} =
+    potrs!(F.uplo, F.factors, B)
 
 #getrs
 for (fname,elty) in ((:cusolverDnSgetrs, :Float32),
