@@ -33,13 +33,21 @@ function status_message(status)
     end
 end
 
-macro check(solver_func)
+macro check(handler::Expr, ex::Expr)
     quote
-        local err::cusolverStatus_t
-        err = $(esc(solver_func::Expr))
-        if err != CUSOLVER_STATUS_SUCCESS
-            throw(CUSOLVERError(err))
+        local status::cusolverStatus_t
+        status = $(esc(ex))
+        if status != CUSOLVER_STATUS_SUCCESS
+            $(esc(handler))(status)
         end
-        err
+        nothing
+    end
+end
+
+macro check(ex::Expr)
+    quote
+        @check($(esc(ex))) do status
+            throw(CUSOLVERError(status))
+        end
     end
 end

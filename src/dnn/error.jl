@@ -11,13 +11,21 @@ function CUDNNError(status::cudnnStatus_t)
     return CUDNNError(status, msg)
 end
 
-macro check(dnn_func)
+macro check(handler::Expr, ex::Expr)
     quote
-        local err::cudnnStatus_t
-        err = $(esc(dnn_func))
-        if err != CUDNN_STATUS_SUCCESS
-            throw(CUDNNError(err))
+        local status::cudnnStatus_t
+        status = $(esc(ex))
+        if status != CUDNN_STATUS_SUCCESS
+            $(esc(handler))(status)
         end
-        err
+        nothing
+    end
+end
+
+macro check(ex::Expr)
+    quote
+        @check($(esc(ex))) do status
+            throw(CUDNNError(status))
+        end
     end
 end

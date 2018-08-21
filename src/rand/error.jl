@@ -43,13 +43,21 @@ function status_message(status)
     end
 end
 
-macro check(func)
+macro check(handler::Expr, ex::Expr)
     quote
-        local err::curandStatus_t
-        err = $(esc(func::Expr))
-        if err != CURAND_STATUS_SUCCESS
-            throw(CURANDError(err))
+        local status::curandStatus_t
+        status = $(esc(ex))
+        if status != CURAND_STATUS_SUCCESS
+            $(esc(handler))(status)
         end
-        err
+        nothing
+    end
+end
+
+macro check(ex::Expr)
+    quote
+        @check($(esc(ex))) do status
+            throw(CURANDError(status))
+        end
     end
 end

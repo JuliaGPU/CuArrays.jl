@@ -51,13 +51,21 @@ function status_message(status)
     end
 end
 
-macro check(fft_func)
+macro check(handler::Expr, ex::Expr)
     quote
-        local err::cufftStatus_t
-        err = $(esc(fft_func::Expr))
-        if err != CUFFT_STATUS_SUCCESS
-            throw(CUFFTError(err))
+        local status::cufftStatus_t
+        status = $(esc(ex))
+        if status != CUFFT_STATUS_SUCCESS
+            $(esc(handler))(status)
         end
-        err
+        nothing
+    end
+end
+
+macro check(ex::Expr)
+    quote
+        @check($(esc(ex))) do status
+            throw(CUFFTError(status))
+        end
     end
 end

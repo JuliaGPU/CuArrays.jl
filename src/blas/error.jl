@@ -37,13 +37,21 @@ function status_message(status)
     end
 end
 
-macro check(blas_func)
+macro check(handler::Expr, ex::Expr)
     quote
-        local err::cublasStatus_t
-        err = $(esc(blas_func::Expr))
-        if err != CUBLAS_STATUS_SUCCESS
-            throw(CUBLASError(err))
+        local status::cublasStatus_t
+        status = $(esc(ex))
+        if status != CUBLAS_STATUS_SUCCESS
+            $(esc(handler))(status)
         end
-        err
+        nothing
+    end
+end
+
+macro check(ex::Expr)
+    quote
+        @check($(esc(ex))) do status
+            throw(CUBLASError(status))
+        end
     end
 end
