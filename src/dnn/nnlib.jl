@@ -109,7 +109,15 @@ function ∇conv_filter!(dw::CuArray{T}, dy::CuArray{T}, x::CuArray{T}, w::CuArr
                                  workspace_size=workspace_size)
 end
 
+# Will be deprecated in https://github.com/FluxML/NNlib.jl/pull/54
 function ∇conv_data!(dx::CuArray{T}, dy::CuArray{T}, x::CuArray{T}, w::CuArray{T};
+                     pad=0, stride=1, flipkernel=0, alpha=1, dilation=1,
+                     workspace::Union{CuVector, Nothing}=nothing, algo=0) where T<:CUDNNFloat
+  ∇conv_data!(dx, dy, w, pad=pad, stride=stride, flipkernel=flipkernel, alpha=alpha,
+              dilation=dilation, workspace=workspace, algo=alog)
+end
+
+function ∇conv_data!(dx::CuArray{T}, dy::CuArray{T}, w::CuArray{T};
                      pad=0, stride=1, flipkernel=0, alpha=1, dilation=1,
                      workspace::Union{CuVector, Nothing}=nothing, algo=0) where T<:CUDNNFloat
   if version() < v"6"
