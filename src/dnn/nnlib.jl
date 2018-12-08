@@ -117,13 +117,13 @@ function ∇conv_data!(dx::CuArray{T}, dy::CuArray{T}, x::CuArray{T}, w::CuArray
   end
   if workspace === nothing
     workspace_size =
-      cudnnGetConvolutionBackwardDataWorkspaceSize(dx, x, w, dy, padding=pad, stride=stride,
+      cudnnGetConvolutionBackwardDataWorkspaceSize(dx, w, dy, padding=pad, stride=stride,
                                                    dilation=dilation, algo=algo, mode=flipkernel)
     workspace = workspace_size != 0 ? conv_workspace(workspace_size) : workspace
   else
     workspace_size = length(workspace[])
   end
-  cudnnConvolutionBackwardData(dx, x, w, dy, padding=pad, stride=stride, dilation=dilation,
+  cudnnConvolutionBackwardData(dx, w, dy, padding=pad, stride=stride, dilation=dilation,
 			       mode=flipkernel, alpha=alpha, algo=algo, workspace=workspace,
                                workspace_size=workspace_size)
 end
