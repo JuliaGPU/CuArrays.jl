@@ -90,7 +90,15 @@ function conv!(y::CuArray{T}, x::CuArray{T}, w::CuArray{T};
 			  alpha=alpha, algo=algo, workspace=workspace, workspace_size=workspace_size)
 end
 
+# Will be deprecated in https://github.com/FluxML/NNlib.jl/pull/54
 function ∇conv_filter!(dw::CuArray{T}, dy::CuArray{T}, x::CuArray{T}, w::CuArray{T};
+                       pad=0, stride=1, flipkernel=0, alpha=1, dilation=1,
+                       workspace::Union{CuVector, Nothing}=nothing, algo=0) where T<:CUDNNFloat
+  ∇conv_filter!(dw, dy, x, pad=pad, stride=stride, flipkernel=flipkernel, alpha=alpha, dilation=dilation
+                workspace=workspace, algo=algo)
+end
+
+function ∇conv_filter!(dw::CuArray{T}, dy::CuArray{T}, x::CuArray{T};
                        pad=0, stride=1, flipkernel=0, alpha=1, dilation=1,
                        workspace::Union{CuVector, Nothing}=nothing, algo=0) where T<:CUDNNFloat
   if version() < v"6"
@@ -98,13 +106,13 @@ function ∇conv_filter!(dw::CuArray{T}, dy::CuArray{T}, x::CuArray{T}, w::CuArr
   end
   if workspace === nothing
     workspace_size =
-      cudnnGetConvolutionBackwardFilterWorkspaceSize(dw, x, w, dy, padding=pad, stride=stride, 
+      cudnnGetConvolutionBackwardFilterWorkspaceSize(dw, x, dy, padding=pad, stride=stride, 
 					             dilation=dilation, algo=algo, mode=flipkernel)
     workspace = workspace_size != 0 ? conv_workspace(workspace_size) : workspace
   else
     workspace_size = length(workspace[])
   end
-  cudnnConvolutionBackwardFilter(dw, x, w, dy, padding=pad, stride=stride, dilation=dilation,
+  cudnnConvolutionBackwardFilter(dw, w, dy, padding=pad, stride=stride, dilation=dilation,
 				 mode=flipkernel, alpha=alpha, algo=algo, workspace=workspace,
                                  workspace_size=workspace_size)
 end
