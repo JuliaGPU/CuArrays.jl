@@ -94,7 +94,7 @@ end
 function ∇conv_filter!(dw::CuArray{T}, dy::CuArray{T}, x::CuArray{T}, w::CuArray{T};
                        pad=0, stride=1, flipkernel=0, alpha=1, dilation=1,
                        workspace::Union{CuVector, Nothing}=nothing, algo=0) where T<:CUDNNFloat
-  ∇conv_filter!(dw, dy, x, pad=pad, stride=stride, flipkernel=flipkernel, alpha=alpha, dilation=dilation
+  ∇conv_filter!(dw, dy, x, pad=pad, stride=stride, flipkernel=flipkernel, alpha=alpha, dilation=dilation,
                 workspace=workspace, algo=algo)
 end
 
