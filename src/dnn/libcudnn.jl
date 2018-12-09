@@ -275,7 +275,7 @@ function cudnnGetConvolutionForwardWorkspaceSize(xDesc, wDesc, convDesc, yDesc, 
                  handle(), xDesc, wDesc, convDesc, yDesc, algo, workspace_size)
 end
 
-function cudnnGetConvolutionForwardWorkspaceSize(y::CuArray{T,N}, w::CuArray{T,N};
+function cudnnGetConvolutionForwardWorkspaceSize(y::CuArray{T,N}, x::CuArray{T,N} w::CuArray{T,N};
                                                  algo=0, padding=0, stride=1,
                                                  dilation=1, mode=0) where {T,N}
     cd = ConvDesc(T, N-2, padding, stride, dilation, mode)
