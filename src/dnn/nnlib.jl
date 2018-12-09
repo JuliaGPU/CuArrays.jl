@@ -112,7 +112,7 @@ function ∇conv_filter!(dw::CuArray{T}, dy::CuArray{T}, x::CuArray{T};
   else
     workspace_size = length(workspace[])
   end
-  cudnnConvolutionBackwardFilter(dw, w, dy, padding=pad, stride=stride, dilation=dilation,
+  cudnnConvolutionBackwardFilter(dw, x, dy, padding=pad, stride=stride, dilation=dilation,
 				 mode=flipkernel, alpha=alpha, algo=algo, workspace=workspace,
                                  workspace_size=workspace_size)
 end
