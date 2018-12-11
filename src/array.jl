@@ -22,6 +22,7 @@ CuMatrix{T} = CuArray{T,2}
 CuVecOrMat{T} = Union{CuVector{T},CuMatrix{T}}
 
 function unsafe_free!(xs::CuArray)
+  Mem.refcounts[xs.buf] == 0 && return
   Mem.release(xs.buf) && dealloc(xs.buf, prod(xs.dims)*sizeof(eltype(xs)))
   return
 end
