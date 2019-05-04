@@ -1,13 +1,31 @@
 import GPUArrays: allowscalar, @allowscalar
 
-function _getindex(xs::CuArray{T}, i::Integer) where T
-  buf = Array{T}(undef)
-  copyto!(buf, 1, xs, i, 1)
-  buf[]
+
+## unified memory indexing
+
+# TODO: needs to think about coherency -- otherwise this might crash since it doesn't sync
+#       also, this optim would be relevant for CuArray<->Array memcpy as well.
+
+function GPUArrays._getindex(xs::CuArray{T}, i::Integer) where T
+  buf = buffer(xs)
+  if isa(buf, Mem.UnifiedBuffer)
+    ptr = convert(Ptr{T}, buffer(xs))
+    unsafe_load(ptr, i)
+  else
+    val = Array{T}(undef)
+    copyto!(val, 1, xs, i, 1)
+    val[]
+  end
 end
 
-function _setindex!(xs::CuArray{T}, v::T, i::Integer) where T
-  copyto!(xs, i, T[v], 1, 1)
+function GPUArrays._setindex!(xs::CuArray{T}, v::T, i::Integer) where T
+  buf = buffer(xs)
+  if isa(buf, Mem.UnifiedBuffer)
+    ptr = convert(Ptr{T}, buffer(xs))
+    unsafe_store!(ptr, v, i)
+  else
+    copyto!(xs, i, T[v], 1, 1)
+  end
 end
 
 
@@ -19,7 +37,7 @@ function Base.getindex(xs::CuArray{T}, bools::CuArray{Bool}) where {T}
   bools = reshape(bools, prod(size(bools)))
   indices = cumsum(bools)  # unique indices for elements that are true
 
-  n = _getindex(indices, length(indices))  # number that are true
+  n = GPUArrays._getindex(indices, length(indices))  # number that are true
   ys = CuArray{T}(undef, n)
 
   if n > 0
