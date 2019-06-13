@@ -4,35 +4,41 @@ using IRTools: meta, Pipe, finish
 import Base.Broadcast.broadcasted
 import Base.Broadcast.materialize
 
-# array_bank = IdDict()
+
+# Hold all the arrays related to the op
+array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
+
+# Hold all the results related to the op, but permanently
 __context__ = IdDict()
-# __context__ = WeakKeyDict()
 
 
 for f in (:+, :-, :*, :/)
   q = quote
       function cuize(::typeof($f), a, b)
-        a = get_cached(__context__, a)
+        a = get_cached(array_bank, a)
         # @show typeof(a)
-        b = get_cached(__context__, b)
+        b = get_cached(array_bank, b)
 
-        c = $f(a, b)
-        get_cached(__context__, c)
+        if haskey(__context__, ($f, a, b))
+          __context__[($f, a, b)]
+        else
+          c = $f(a, b)
+          __context__[($f, a, b)] = c
+        end
       end
     end
   eval(q)
 end
 
-function get_cached(__context___, arr)
-  @show "here"
-  haskey(__context__, arr) ?
-    __context___[arr] :
-    cache(__context___, arr)
+function get_cached(array_bank, arr)
+  haskey(array_bank, arr) ?
+    array_bank[arr] :
+    cache(array_bank, arr)
 
 end
 
-function cache(__context___, arr)
-  __context___[arr] = cu(arr)
+function cache(array_bank, arr)
+  array_bank[arr] = cu(arr)
 end
 
 # using `Array` instead of `cpu` here works but
