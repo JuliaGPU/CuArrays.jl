@@ -15,14 +15,13 @@ __context__ = IdDict()
 for f in (:+, :-, :*, :/)
   q = quote
       function cuize(::typeof($f), a, b)
-        a = get_cached(array_bank, a)
-        # @show typeof(a)
-        b = get_cached(array_bank, b)
 
         if haskey(__context__, ($f, a, b))
-          __context__[($f, a, b)]
+          return __context__[($f, a, b)]
         else
-          c = $f(a, b)
+          ga = get_cached(array_bank, a)
+          gb = get_cached(array_bank, b)
+          c = $f(ga, gb)
           __context__[($f, a, b)] = c
         end
       end
