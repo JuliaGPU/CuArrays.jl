@@ -6,24 +6,46 @@ import Base.Broadcast.materialize
 
 
 # Hold all the arrays related to the op
-array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
+# array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
+# array_bank = WeakKeyDict()
+array_bank = IdDict()
 
 # Hold all the results related to the op, but permanently
 __context__ = IdDict()
+
+# function cache(__context__, f, args...)
+#   q = quote
+#     function cuize(::typeof($f), args...)
+#       if haskey(__context__, ($f, args...))
+#         __context__[($f, args...)]
+#       else
+#         gargs = map(x -> get_cached(array_bank, x), args)
+#         c = $f(gargs...)
+#         __context__[($f, args...)] = c
+#         end
+#       end
+#   end
+#   eval(q)
+# end
 
 
 for f in (:+, :-, :*, :/)
   q = quote
       function cuize(::typeof($f), a, b)
+        # @show length(a)
+        # ga = get_cached(array_bank, a)
+        # gb = get_cached(array_bank, b)
 
-        if haskey(__context__, ($f, a, b))
-          return __context__[($f, a, b)]
-        else
+        # c = $f(ga, gb)
+        # __context__[c] = c
+        # if haskey(__context__, ($f, a, b))
+          # __context__[($f, a, b)]
+        # else
           ga = get_cached(array_bank, a)
           gb = get_cached(array_bank, b)
           c = $f(ga, gb)
-          __context__[($f, a, b)] = c
-        end
+          # __context__[($f, a, b)] = c
+        # end
       end
     end
   eval(q)
