@@ -29,6 +29,18 @@ __context__ = IdDict()
 # end
 
 
+# function cuize(f, args...)
+#   q = quote
+#     function cuize(::typeof($f), args...)
+#       gargs = map(x -> get_cached(array_bank, x), args)
+#       c = $f(gargs...)
+#     end
+#   end
+#   eval(q)
+#   # cuize(f, args...)
+# end
+
+
 for f in (:+, :-, :*, :/)
   q = quote
       function cuize(::typeof($f), a, b)
