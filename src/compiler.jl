@@ -3,6 +3,7 @@ using IRTools: meta, Pipe, finish
 
 import Base.Broadcast.broadcasted
 import Base.Broadcast.materialize
+import Base.Broadcast.Broadcasted
 
 
 # Hold all the arrays related to the op
@@ -43,7 +44,7 @@ __context__ = IdDict()
 
 for f in (:+, :-, :*, :/)
   q = quote
-      function cuize(::typeof($f), a, b)
+      function cuize(::typeof($f), a::AbstractArray, b::AbstractArray)
         # @show length(a)
         # ga = get_cached(array_bank, a)
         # gb = get_cached(array_bank, b)
@@ -53,6 +54,7 @@ for f in (:+, :-, :*, :/)
         # if haskey(__context__, ($f, a, b))
           # __context__[($f, a, b)]
         # else
+        # @timeit to "cuize" begin
           ga = get_cached(array_bank, a)
           gb = get_cached(array_bank, b)
           c = $f(ga, gb)
@@ -64,11 +66,27 @@ for f in (:+, :-, :*, :/)
 end
 
 function get_cached(array_bank, arr)
+  # @show typeof(arr)
+
+  # CuArrays can come up when you have outputs/ movements before ops
+  arr isa CuArray && return arr
+
+  # Broadcasted objects are new everytime they're generated, ignore them
+  arr isa Broadcasted && return arr
+
   haskey(array_bank, arr) ?
     array_bank[arr] :
     cache(array_bank, arr)
 
 end
+
+
+get_cached(x::AbstractArray) = get_cached(array_bank, x)
+
+# get_cached(array_bank, arr::TrackedArray) = get_cached(array_bank, Tracker.data(arr))
+get_cached(arr::TrackedArray) = get_cached(Tracker.data(arr))
+
+
 
 function cache(array_bank, arr)
   array_bank[arr] = cu(arr)
@@ -83,7 +101,7 @@ end
 cuize(::typeof(materialize), bc) = materialize(bc)
 
 function cuize(::typeof(broadcasted), f, a...)
-  b = map(cu, a)
+  b = map(x -> get_cached(array_bank, x), a)
   broadcasted(f, b...)
 end
 
