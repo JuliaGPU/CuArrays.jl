@@ -9,7 +9,7 @@ import Base.Broadcast.Broadcasted
 # Hold all the arrays related to the op
 # array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
 # array_bank = WeakKeyDict()
-array_bank = IdDict()
+array_bank = IdDict{AbstractArray, AbstractArray}()
 
 # Hold all the results related to the op, but permanently
 __context__ = IdDict()
@@ -29,6 +29,7 @@ __context__ = IdDict()
 #   eval(q)
 # end
 
+# function get_cached end
 
 # function cuize(f, args...)
 #   q = quote
@@ -40,7 +41,6 @@ __context__ = IdDict()
 #   eval(q)
 #   # cuize(f, args...)
 # end
-
 
 for f in (:+, :-, :*, :/)
   q = quote
@@ -65,30 +65,26 @@ for f in (:+, :-, :*, :/)
   eval(q)
 end
 
-function get_cached(array_bank, arr)
-  # @show typeof(arr)
-
+function get_cached(array_bank, arr::AbstractArray)
   # CuArrays can come up when you have outputs/ movements before ops
   arr isa CuArray && return arr
 
   # Broadcasted objects are new everytime they're generated, ignore them
   arr isa Broadcasted && return arr
 
+  arr isa TrackedArray && arr.data isa CuArray && return arr
+
   haskey(array_bank, arr) ?
     array_bank[arr] :
     cache(array_bank, arr)
-
 end
 
-
-get_cached(x::AbstractArray) = get_cached(array_bank, x)
+# get_cached(x::AbstractArray) = get_cached(array_bank, parent(x))
 
 # get_cached(array_bank, arr::TrackedArray) = get_cached(array_bank, Tracker.data(arr))
-get_cached(arr::TrackedArray) = get_cached(Tracker.data(arr))
+# get_cached(array_bank, arr::TrackedArray) = get_cached(Tracker.data(arr))
 
-
-
-function cache(array_bank, arr)
+function cache(array_bank, arr::AbstractArray)
   array_bank[arr] = cu(arr)
 end
 
@@ -100,9 +96,30 @@ end
 # cuize(::typeof(/), a, b) = cpu(cu(a) / cu(b))
 cuize(::typeof(materialize), bc) = materialize(bc)
 
-function cuize(::typeof(broadcasted), f, a...)
-  b = map(x -> get_cached(array_bank, x), a)
-  broadcasted(f, b...)
+# function cuize(::typeof(getproperty), args...)
+#   # @show args
+#   getproperty(args...)
+# end
+
+# function cuize(::typeof(getfield), args...)
+#   # @info "in getfield: $(typeof.(args))"
+#   getfield(args...)
+#   # try
+#   #   getfield(args...)
+#   # catch e
+#   #   @show typeof.(args)
+#   #   throw()
+#   # end
+# end
+
+function cuize(::typeof(broadcasted), f, args...)
+  gargs = map(x -> get_cached(array_bank, x), args)
+  broadcasted(f, gargs...)
+end
+
+function cuize(::typeof(broadcast), f, args...)
+  gargs = map(x -> get_cached(array_bank, x), args)
+  broadcast(f, gargs...)
 end
 
 @dynamo function cuize(meta...)
@@ -117,3 +134,45 @@ end
   end
   return finish(pr)
 end
+
+
+
+
+###################################################################
+
+# function cuize(f, args...)
+#   T = Tuple{typeof(f), typeof.(args)...}
+#   q = quote
+#     function cuize(::typeof($f), args...)
+#       # @show typeof.(args)
+#       gargs = map(x -> get_cached(array_bank, x), args)
+#       # @show typeof.(gargs)
+#       # @timeit to "gf" gf = get_cached(array_bank, $f)
+#       gf = get_cached(array_bank, $f)
+#       # @show typeof($f)
+#       c = gf(gargs...)
+#     end
+#   end
+#   eval(q)
+
+#   c = invoke(cuize, Tuple{typeof(f), typeof.(args)...}, (f, args...))
+# end
+
+function children(x::T, fs = fieldnames(T)) where T
+  map(f -> get_cached(array_bank, getproperty(x, f)), fs)
+end
+
+mapchildren(x::T) where T = @eval $(Symbol(T.name))($(children(x))...)
+
+function get_cached(array_bank, x)
+
+  x isa Broadcasted && return x
+  x isa Type && return x
+  x isa Function && return x
+
+  haskey(__context__, x) && return __context__[x]
+
+  __context__[x] = mapchildren(x)
+end
+
+get_cached(array_bank, t::Tuple) = t
