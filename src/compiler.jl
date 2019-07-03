@@ -14,52 +14,12 @@ array_bank = IdDict{AbstractArray, AbstractArray}()
 # Hold all the results related to the op, but permanently
 __context__ = IdDict()
 
-# function cache(__context__, f, args...)
-#   q = quote
-#     function cuize(::typeof($f), args...)
-#       if haskey(__context__, ($f, args...))
-#         __context__[($f, args...)]
-#       else
-#         gargs = map(x -> get_cached(array_bank, x), args)
-#         c = $f(gargs...)
-#         __context__[($f, args...)] = c
-#         end
-#       end
-#   end
-#   eval(q)
-# end
-
-# function get_cached end
-
-# function cuize(f, args...)
-#   q = quote
-#     function cuize(::typeof($f), args...)
-#       gargs = map(x -> get_cached(array_bank, x), args)
-#       c = $f(gargs...)
-#     end
-#   end
-#   eval(q)
-#   # cuize(f, args...)
-# end
-
 for f in (:+, :-, :*, :/)
   q = quote
       function cuize(::typeof($f), a::AbstractArray, b::AbstractArray)
-        # @show length(a)
-        # ga = get_cached(array_bank, a)
-        # gb = get_cached(array_bank, b)
-
-        # c = $f(ga, gb)
-        # __context__[c] = c
-        # if haskey(__context__, ($f, a, b))
-          # __context__[($f, a, b)]
-        # else
-        # @timeit to "cuize" begin
           ga = get_cached(array_bank, a)
           gb = get_cached(array_bank, b)
           c = $f(ga, gb)
-          # __context__[($f, a, b)] = c
-        # end
       end
     end
   eval(q)
@@ -68,10 +28,6 @@ end
 function get_cached(array_bank, arr::AbstractArray)
   # CuArrays can come up when you have outputs/ movements before ops
   arr isa CuArray && return arr
-
-  # Broadcasted objects are new everytime they're generated, ignore them
-  arr isa Broadcasted && return arr
-
   arr isa TrackedArray && arr.data isa CuArray && return arr
 
   haskey(array_bank, arr) ?
@@ -79,38 +35,11 @@ function get_cached(array_bank, arr::AbstractArray)
     cache(array_bank, arr)
 end
 
-# get_cached(x::AbstractArray) = get_cached(array_bank, parent(x))
-
-# get_cached(array_bank, arr::TrackedArray) = get_cached(array_bank, Tracker.data(arr))
-# get_cached(array_bank, arr::TrackedArray) = get_cached(Tracker.data(arr))
-
-function cache(array_bank, arr::AbstractArray)
+function cache(array_bank::IdDict{T,T}, arr::AbstractArray) where T <: AbstractArray
   array_bank[arr] = cu(arr)
 end
 
-# using `Array` instead of `cpu` here works but
-# causes tracking issues with TrackedArray
-# cuize(::typeof(*), a, b) = cpu(cu(a) * cu(b))
-# cuize(::typeof(+), a, b) = cpu(cu(a) + cu(b))
-# cuize(::typeof(-), a, b) = cpu(cu(a) - cu(b))
-# cuize(::typeof(/), a, b) = cpu(cu(a) / cu(b))
 cuize(::typeof(materialize), bc) = materialize(bc)
-
-# function cuize(::typeof(getproperty), args...)
-#   # @show args
-#   getproperty(args...)
-# end
-
-# function cuize(::typeof(getfield), args...)
-#   # @info "in getfield: $(typeof.(args))"
-#   getfield(args...)
-#   # try
-#   #   getfield(args...)
-#   # catch e
-#   #   @show typeof.(args)
-#   #   throw()
-#   # end
-# end
 
 function cuize(::typeof(broadcasted), f, args...)
   gargs = map(x -> get_cached(array_bank, x), args)
@@ -135,28 +64,22 @@ end
   return finish(pr)
 end
 
-
-
-
 ###################################################################
 
-# function cuize(f, args...)
-#   T = Tuple{typeof(f), typeof.(args)...}
-#   q = quote
-#     function cuize(::typeof($f), args...)
-#       # @show typeof.(args)
-#       gargs = map(x -> get_cached(array_bank, x), args)
-#       # @show typeof.(gargs)
-#       # @timeit to "gf" gf = get_cached(array_bank, $f)
-#       gf = get_cached(array_bank, $f)
-#       # @show typeof($f)
-#       c = gf(gargs...)
-#     end
-#   end
-#   eval(q)
-
-#   c = invoke(cuize, Tuple{typeof(f), typeof.(args)...}, (f, args...))
-# end
+# Makes things work, but breaks continuity
+# Gets called after every line of IR, make it stop
+function cuize(f::T, arg1, args...) where T 
+  q = quote
+    function cuize(::typeof($f), arg1, args...)
+      garg1 = get_cached(arg1)
+      gargs = map(get_cached, args)
+      gf = get_cached($f)
+      c = gf(garg1, gargs...)
+    end
+  end
+  eval(q)
+  c = invoke(cuize, Tuple{typeof(f), typeof(arg1), typeof.(args)...}, (f, arg1, args...))
+end
 
 function children(x::T, fs = fieldnames(T)) where T
   map(f -> get_cached(array_bank, getproperty(x, f)), fs)
@@ -164,15 +87,19 @@ end
 
 mapchildren(x::T) where T = @eval $(Symbol(T.name))($(children(x))...)
 
-function get_cached(array_bank, x)
-
-  x isa Broadcasted && return x
-  x isa Type && return x
-  x isa Function && return x
-
+function get_cached(__context__, x::T) where T
   haskey(__context__, x) && return __context__[x]
+  x isa CuArray && return x
+  x isa TrackedArray && x.data isa CuArray && return x
 
   __context__[x] = mapchildren(x)
 end
 
-get_cached(array_bank, t::Tuple) = t
+get_cached(array_bank, t::Union{Type, Function, Broadcasted, T}) where {T <: Real} = t
+get_cached(array_bank, t::Union{Tuple,NamedTuple}) = map(get_cached, t)
+
+function get_cached(x::T) where T
+  T <: AbstractArray && return get_cached(array_bank, x)
+  isstructtype(T) && return get_cached(__context__, x)
+  get_cached(array_bank, x)
+end
