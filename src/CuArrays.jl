@@ -51,6 +51,8 @@ libcudnn !== nothing && include("dnn/CUDNN.jl")
 
 include("nnlib.jl")
 
+include("context.jl")
+
 include("deprecated.jl")
 
 function __init__()
