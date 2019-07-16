@@ -4,7 +4,7 @@ using CUDAdrv, CUDAnative
 
 using GPUArrays
 
-export CuArray, CuVector, CuMatrix, CuVecOrMat, cu
+export CuArray, CuVector, CuMatrix, CuVecOrMat, cu, cuda
 
 import LinearAlgebra
 

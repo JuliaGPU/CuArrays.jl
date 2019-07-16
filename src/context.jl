@@ -7,40 +7,34 @@ import Base.Broadcast.Broadcasted
 
 
 # Hold all the arrays related to the op
-# array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
-# array_bank = WeakKeyDict()
-array_bank = IdDict{AbstractArray, AbstractArray}()
+# TODO: this should be a context
+const array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
 
 # Hold all the objects related to the op
-obs = IdDict()
+# obs = IdDict()
 
 for f in (:+, :-, :*, :/)
-  q = quote
-      function cuize(::typeof($f), a::AbstractArray, b::AbstractArray)
-          ga = get_cached(array_bank, a)
-          gb = get_cached(array_bank, b)
-          c = $f(ga, gb)
-      end
-    end
-  eval(q)
+  @eval function cuize(::typeof($f), a::AbstractArray, b::AbstractArray)
+    ga = get_cached(array_bank, a)
+    gb = get_cached(array_bank, b)
+    c = $f(ga, gb)
+  end
 end
 
-function get_cached(array_bank::IdDict{T,T}, arr::AbstractArray) where T <: AbstractArray
+function get_cached(array_bank, arr::AbstractArray)
   # CuArrays can come up when you have outputs/ movements before ops
   arr isa CuArray && return arr
-  arr isa TrackedArray && arr.data isa CuArray && return arr
 
   haskey(array_bank, arr) ?
     array_bank[arr] :
     cache(array_bank, arr)
 end
 
-function cache(array_bank::IdDict{T,T}, arr::AbstractArray{<:Real}) where T <: AbstractArray
-
+function cache(array_bank, arr::AbstractArray{<:Real}) where T <: AbstractArray
   array_bank[arr] = cu(arr)
 end
 
-cache(array_bank::IdDict{T,T}, arr::AbstractArray) where T <: AbstractArray = map(get_cached, arr)
+cache(array_bank, arr::AbstractArray) = map(get_cached, arr)
 # function cache(array_bank::IdDict, s::K) where K <: AbstractSet
 #   t = K()
 #   for p in s
@@ -78,7 +72,7 @@ end
     isexpr(st.expr, :call) || continue
     ex = st.expr
 
-    pr[v] = Expr(:call, GlobalRef(Main, :cuize), ex.args...)
+    pr[v] = Expr(:call, GlobalRef(CuArrays, :cuize), ex.args...)
 
   end
   return finish(pr)
@@ -109,7 +103,6 @@ mapchildren(x::T) where T = children(x)
 function get_cached(obs, x::T) where T
   haskey(obs, x) && return obs[x]
   x isa CuArray && return x
-  x isa TrackedArray && x.data isa CuArray && return x
 
   obs[x] = mapchildren(x)
 end
@@ -148,4 +141,8 @@ end
 function cuize(::typeof(invoke), f::T, types, args...) where T
   gf = f isa Function ? f : makechildren(T, get_cached(obs, f))
   invoke(gf, types, map(get_cached, args)...)
+end
+
+function cuda(f)
+  cuize(f)
 end
