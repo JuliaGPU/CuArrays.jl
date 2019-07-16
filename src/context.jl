@@ -5,10 +5,19 @@ import Base.Broadcast.broadcasted
 import Base.Broadcast.materialize
 import Base.Broadcast.Broadcasted
 
+function _resize!(a::Array, sz::NTuple{<:Any,Integer})
+  ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, prod(sz))
+  ptr = convert(Ptr{Csize_t},pointer_from_objref(a))
+  for i = 1:length(sz)
+    unsafe_store!(ptr+8*(i+2), sz[i])
+  end
+  return a
+end
 
-# Hold all the arrays related to the op
-# TODO: this should be a context
-const array_bank = WeakKeyDict{Array,CuArray}()
+function refill!(a::Array, b::CuArray)
+  _resize!(a, size(b))
+  copy!(a, b)
+end
 
 function cache(cx, x::CuArray{T,N})::Array{T,N} where {T,N}
   cpu = Array{T,N}(undef, ntuple(_->0,N))
@@ -133,6 +142,16 @@ function cuize(::typeof(invoke), f::T, types, args...) where T
   invoke(gf, types, map(get_cached, args)...)
 end
 
+# Hold all the arrays related to the op
+# TODO: this should be a context
+const array_bank = IdDict{Array,CuArray}()
+
 function cuda(f)
-  cuize(f)
+  out = cuize(f)
+  for (x, cx) in array_bank
+    length(x) == length(cx) && continue
+    refill!(x, cx)
+  end
+  empty!(array_bank)
+  return out
 end

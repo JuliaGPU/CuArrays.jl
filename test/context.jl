@@ -3,6 +3,4 @@ using CuArrays, Test
 W = rand(5, 5)
 b = rand(5)
 
-@test cuda() do
-  W*b
-end isa Array
+@test cuda(() -> W*b) ≈ W*b
