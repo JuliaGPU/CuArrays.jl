@@ -5,4 +5,4 @@ b = rand(5)
 
 @test cuda() do
   W*b
-end ≈ W*b
+end isa Array

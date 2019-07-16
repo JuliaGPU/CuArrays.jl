@@ -10,6 +10,12 @@ import Base.Broadcast.Broadcasted
 # TODO: this should be a context
 const array_bank = WeakKeyDict{Array,CuArray}()
 
+function cache(cx, x::CuArray{T,N})::Array{T,N} where {T,N}
+  cpu = Array{T,N}(undef, ntuple(_->0,N))
+  cx[cpu] = x
+  return cpu
+end
+
 # Hold all the objects related to the op
 # obs = IdDict()
 
@@ -17,7 +23,7 @@ for f in (:+, :-, :*, :/)
   @eval function cuize(::typeof($f), a::Array, b::Array)
     ga = get_cached(array_bank, a)
     gb = get_cached(array_bank, b)
-    c = $f(ga, gb)
+    cache(array_bank, $f(ga, gb))
   end
 end
 
