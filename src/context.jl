@@ -8,40 +8,24 @@ import Base.Broadcast.Broadcasted
 
 # Hold all the arrays related to the op
 # TODO: this should be a context
-const array_bank = WeakKeyDict{AbstractArray, AbstractArray}()
+const array_bank = WeakKeyDict{Array,CuArray}()
 
 # Hold all the objects related to the op
 # obs = IdDict()
 
 for f in (:+, :-, :*, :/)
-  @eval function cuize(::typeof($f), a::AbstractArray, b::AbstractArray)
+  @eval function cuize(::typeof($f), a::Array, b::Array)
     ga = get_cached(array_bank, a)
     gb = get_cached(array_bank, b)
     c = $f(ga, gb)
   end
 end
 
-function get_cached(array_bank, arr::AbstractArray)
-  # CuArrays can come up when you have outputs/ movements before ops
-  arr isa CuArray && return arr
-
+function get_cached(array_bank, arr::Array{T,N})::CuArray{T,N} where {T,N}
   haskey(array_bank, arr) ?
     array_bank[arr] :
-    cache(array_bank, arr)
+    (array_bank[arr] = CuArray(arr))
 end
-
-function cache(array_bank, arr::AbstractArray{<:Real}) where T <: AbstractArray
-  array_bank[arr] = cu(arr)
-end
-
-cache(array_bank, arr::AbstractArray) = map(get_cached, arr)
-# function cache(array_bank::IdDict, s::K) where K <: AbstractSet
-#   t = K()
-#   for p in s
-#     push!(t, get_cached(p))
-#   end
-#   t
-# end
 
 function cuize(::typeof(broadcasted), f, args...)
   gargs = map(x -> get_cached(array_bank, x), args)
@@ -111,7 +95,7 @@ get_cached(array_bank, t::Union{Type, Function, Broadcasted, Symbol, Module, Not
 get_cached(array_bank, t::Union{Tuple, NamedTuple}) = map(get_cached, t)
 
 function get_cached(x::T) where T
-  T <: AbstractArray && return get_cached(array_bank, x)
+  T <: Array && return get_cached(array_bank, x)
   isstructtype(T) && return x # get_cached(obs, x)
   get_cached(array_bank, x)
 end
