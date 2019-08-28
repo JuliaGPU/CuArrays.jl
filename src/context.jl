@@ -6,24 +6,25 @@ import Base.Broadcast.broadcasted
 import Base.Broadcast.materialize
 import Base.Broadcast.Broadcasted
 
-struct IRCtx{T,K}
-  array_bank::IdDict{T,K}
-
-  IRCtx() = new{Array, CuArray}(IdDict{Array,CuArray}())
+# TODO use a WeakKeyDict
+struct CUDACtx
+  array_bank::IdDict{Array,CuArray}
 end
 
+CUDACtx() = CUDACtx(IdDict{Array,CuArray}())
+
 # Display fns for debugging, remove before committing
-function Base.summary(io::IO, c::IRCtx)
+function Base.summary(io::IO, c::CUDACtx)
   print(io, "IR Context for CUDA ")
   summary(io, c.array_bank)
 end
 
-function Base.show(io::IO, c::IRCtx{T,K}) where {T,K}
+function Base.show(io::IO, c::CUDACtx)
   print(io, "IR Context for CUDA ")
   display(c.array_bank)
 end
 
-@forward IRCtx.array_bank Base.getindex, Base.iterate,
+@forward CUDACtx.array_bank Base.getindex, Base.iterate,
 			Base.setindex!, Base.empty!,
 			Base.length,
 			Base.first, Base.last, Base.haskey
@@ -49,7 +50,7 @@ function cache(cx, x::CuArray{T,N})::Array{T,N} where {T,N}
 end
 
 for f in (:+, :-, :*, :/)
-  @eval function (c::IRCtx)(::typeof($f), a::AbstractArray, b::AbstractArray)
+  @eval function (c::CUDACtx)(::typeof($f), a::AbstractArray, b::AbstractArray)
     ga = get_cached(array_bank, a)
     gb = get_cached(array_bank, b)
     # cache(array_bank, $f(ga, gb))
@@ -63,26 +64,26 @@ function get_cached(array_bank, arr::Array{T,N})::CuArray{T,N} where {T,N}
     (array_bank[arr] = CuArray(arr))
 end
 
-function (c::IRCtx)(::typeof(broadcasted), f, args...)
+function (c::CUDACtx)(::typeof(broadcasted), f, args...)
   gargs = map(x -> get_cached(array_bank, x), args)
   broadcasted(f, gargs...)
 end
 
-function (c::IRCtx)(::typeof(getproperty), o, s::Symbol)
+function (c::CUDACtx)(::typeof(getproperty), o, s::Symbol)
   getproperty(o, s) |> get_cached
 end
 
-function (c::IRCtx)(::typeof(broadcast), f, args...)
+function (c::CUDACtx)(::typeof(broadcast), f, args...)
   gargs = map(x -> get_cached(array_bank, x), args)
   broadcast(f, gargs...)
 end
 
-function (c::IRCtx)(::typeof(getfield), o, s::Symbol)
+function (c::CUDACtx)(::typeof(getfield), o, s::Symbol)
   getfield(o, s) |> get_cached
 end
 
 function wrap_cuize(f)
-  @eval function (c::IRCtx)(::typeof($f), args...)
+  @eval function (c::CUDACtx)(::typeof($f), args...)
     gargs = map(get_cached, args)
     $f(gargs...) # use `cache`
   end
@@ -90,11 +91,11 @@ end
 
 wrap_cuize.((sum, similar, ))
 
-function (c::IRCtx)(::typeof(reshape), arr, args...)
+function (c::CUDACtx)(::typeof(reshape), arr, args...)
   reshape(get_cached(arr), args...)
 end
 
-@dynamo function (c::IRCtx)(meta...)
+@dynamo function (c::CUDACtx)(meta...)
   meta == nothing && return
   ir = IR(meta...)
   ir == nothing && return
@@ -122,10 +123,10 @@ function get_cached(x::T) where T
 end
 
 """
-  Disable `IRCtx` for a function
+  Disable `CUDACtx` for a function
 """
 function noop_pass(f)
-  @eval (c::IRCtx)(::typeof($f), args...) = $f(args...)
+  @eval (c::CUDACtx)(::typeof($f), args...) = $f(args...)
 end
 
 noop_pass.((materialize, get_cached, NNlib.check_spdf,
@@ -133,7 +134,7 @@ noop_pass.((materialize, get_cached, NNlib.check_spdf,
 
 for f in names(NNlib)
   getfield(NNlib, f) isa Function || continue
-  @eval function (c::IRCtx)(::typeof($f), args...)
+  @eval function (c::CUDACtx)(::typeof($f), args...)
     gargs = map(get_cached, args)
     # cache(array_bank, $f(gargs...))
     $f(gargs...)
@@ -145,7 +146,7 @@ end
 # BitArray and friends would like an AbstractArray construct
 # const array_bank = IdDict{Array,CuArray}()
 
-const array_bank = IRCtx()
+const array_bank = CUDACtx()
 
 """
   Creates a `cuda` context within which we travel
