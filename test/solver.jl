@@ -29,7 +29,7 @@ k = 1
         @test F.L   ≈ collect(d_F.L)
         @test F\(A'B) ≈ collect(d_F\(d_A'd_B))
 
-        @test_throws DimensionMismatch LinearAlgebra.LAPACK.potrs!('U',d_A,CuArray(rand(elty,m,m)))
+        @test_throws DimensionMismatch LinearAlgebra.LAPACK.potrs!('U',d_A,CuArrays.rand(elty,m,m))
 
         A    = rand(elty,m,n)
         d_A  = CuArray(A)
@@ -229,7 +229,7 @@ k = 1
         end
         h_W            = collect(d_W)
         @test Eig.values ≈ h_W
-        d_B            = CuArray(rand(elty, m+1, m+1))
+        d_B            = CuArrays.rand(elty, m+1, m+1)
         if( elty <: Complex )
             @test_throws DimensionMismatch CUSOLVER.hegvd!(1, 'N','U', d_A, d_B)
         else
@@ -307,15 +307,20 @@ k = 1
         d_RR           = d_F.Q'*d_A
         @test d_RR[1:n,:] ≈ d_F.R atol=tol*norm(A)
         @test norm(d_RR[n+1:end,:]) < tol*norm(A)
+        @test size(d_F) == size(A)
+        @test size(d_F.Q, 1) == size(A, 1)
+        @test det(d_F.Q) ≈ det(collect(d_F.Q * CuMatrix{elty}(I, size(d_F.Q)))) atol=tol*norm(A)
         A              = rand(elty, n, m)
         d_A            = CuArray(A)
         d_F            = qr(d_A)
         @test d_F.Q'*d_A ≈ d_F.R atol=tol*norm(A)
+        @test det(d_F.Q) ≈ det(collect(d_F.Q * CuMatrix{elty}(I, size(d_F.Q)))) atol=tol*norm(A)
         A              = rand(elty, m, n)
         d_A            = CuArray(A)
         h_q, h_r       = qr(d_A)
         q, r           = qr(A)
         @test Array(h_q) ≈ Array(q)
+        @test collect(CuArray(h_q)) ≈ Array(q)
         @test Array(h_r) ≈ Array(r)
         A              = rand(elty, n, m)
         d_A            = CuArray(A)

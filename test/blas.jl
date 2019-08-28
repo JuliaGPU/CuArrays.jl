@@ -15,14 +15,17 @@ k = 13
 @test_throws ArgumentError CUBLAS.cublasside('V')
 
 # this is an internal function, but only used on some devices so make sure it works
-CUBLAS.cublasSetMathMode(CUBLAS.CUBLAS_DEFAULT_MATH)
+if CUBLAS.version() >= v"9"
+    CUBLAS.cublasSetMathMode(CUBLAS.CUBLAS_DEFAULT_MATH)
+end
+
 
 #################
 # level 1 tests #
 #################
 
 @testset "Level 1 with element type $T" for T in [Float32, Float64, ComplexF32, ComplexF64]
-    A = CuArray(rand(T, m))
+    A = CuArrays.rand(T, m)
     B = CuArray{T}(undef, m)
     CuArrays.CUBLAS.blascopy!(m,A,1,B,1)
     @test Array(A) == Array(B)
@@ -38,6 +41,15 @@ CUBLAS.cublasSetMathMode(CUBLAS.CUBLAS_DEFAULT_MATH)
     if T <: Real
         @test testf(argmin, rand(T, m))
         @test testf(argmax, rand(T, m))
+    else
+        @test testf(BLAS.dotu, rand(T, m), rand(T, m))
+        x = rand(T, m)
+        y = rand(T, m)
+        dx = CuArray(x)
+        dy = CuArray(y)
+        dz = BLAS.dot(dx, dy)
+        z = BLAS.dotc(x, y)
+        @test dz ≈ z
     end
 end # level 1 testset
 
@@ -46,10 +58,20 @@ end # level 1 testset
     beta = convert(elty,3)
 
     @testset "Level 2" begin
-        @testset "gemv" begin 
+        @testset "gemv" begin
             @test testf(*, rand(elty, m, n), rand(elty, n))
             @test testf(*, transpose(rand(elty, m, n)), rand(elty, m))
             @test testf(*, rand(elty, m, n)', rand(elty, m))
+            x = rand(elty, m)
+            A = rand(elty, m, m + 1 )
+            y = rand(elty, m)
+            dx = CuArray(x)
+            dA = CuArray(A)
+            dy = CuArray(y)
+            @test_throws DimensionMismatch mul!(dy, dA, dx)
+            A = rand(elty, m + 1, m )
+            dA = CuArray(A)
+            @test_throws DimensionMismatch mul!(dy, dA, dx)
         end
         @testset "banded methods" begin
             # bands
@@ -122,7 +144,7 @@ end # level 1 testset
                     h_y = Array(d_y)
                     @test y ≈ h_y
                 end
-                @testset "sbmv" begin 
+                @testset "sbmv" begin
                     d_y = CuArrays.CUBLAS.sbmv('U',nbands,d_AB,d_x)
                     y = A*x
                     # compare
@@ -158,7 +180,7 @@ end # level 1 testset
             AB = band(A,0,nbands)
             d_AB = CuArray(AB)
             @testset "tbmv!" begin
-                y = rand(elty, m) 
+                y = rand(elty, m)
                 # move to host
                 d_y = CuArray(y)
                 # tbmv!
@@ -202,7 +224,7 @@ end # level 1 testset
         hA = hA + hA'
         dhA = CuArray(hA)
         x = rand(elty,m)
-        dx = CuArray(x) 
+        dx = CuArray(x)
         @testset "symv!" begin
             # generate vectors
             y = rand(elty,m)
@@ -237,7 +259,7 @@ end # level 1 testset
                 hy = Array(dy)
                 @test y ≈ hy
             end
-            @testset "hemv" begin 
+            @testset "hemv" begin
                 y = BLAS.hemv('U',hA,x)
                 # execute on device
                 dy = CuArrays.CUBLAS.hemv('U',dhA,dx)
@@ -258,7 +280,7 @@ end # level 1 testset
             @test y ≈ h_y
         end
 
-        @testset "trmv" begin 
+        @testset "trmv" begin
             d_y = CuArrays.CUBLAS.trmv('U','N','N',dA,dx)
             y = A*x
             # compare
@@ -282,6 +304,55 @@ end # level 1 testset
             # compare
             h_y = Array(d_y)
             @test y ≈ h_y
+        end
+
+        @testset "ldiv!(::UpperTriangular, ::CuVector)" begin
+            A = copy(sA)
+            dA = CuArray(A)
+            dy = copy(dx)
+            ldiv!(UpperTriangular(dA), dy)
+            y = UpperTriangular(A) \ x
+            @test y ≈ Array(dy)
+        end
+        @testset "ldiv!(::AdjointUpperTriangular, ::CuVector)" begin
+            A = copy(sA)
+            dA = CuArray(A)
+            dy = copy(dx)
+            ldiv!(adjoint(UpperTriangular(dA)), dy)
+            y = adjoint(UpperTriangular(A)) \ x
+            @test y ≈ Array(dy)
+        end
+        @testset "ldiv!(::TransposeUpperTriangular, ::CuVector)" begin
+            A = copy(sA)
+            dA = CuArray(A)
+            dy = copy(dx)
+            ldiv!(transpose(UpperTriangular(dA)), dy)
+            y = transpose(UpperTriangular(A)) \ x
+            @test y ≈ Array(dy)
+        end
+        @testset "ldiv!(::UpperTriangular, ::CuVector)" begin
+            A = copy(sA)
+            dA = CuArray(A)
+            dy = copy(dx)
+            ldiv!(LowerTriangular(dA), dy)
+            y = LowerTriangular(A) \ x
+            @test y ≈ Array(dy)
+        end
+        @testset "ldiv!(::AdjointUpperTriangular, ::CuVector)" begin
+            A = copy(sA)
+            dA = CuArray(A)
+            dy = copy(dx)
+            ldiv!(adjoint(LowerTriangular(dA)), dy)
+            y = adjoint(LowerTriangular(A)) \ x
+            @test y ≈ Array(dy)
+        end
+        @testset "ldiv!(::TransposeUpperTriangular, ::CuVector)" begin
+            A = copy(sA)
+            dA = CuArray(A)
+            dy = copy(dx)
+            ldiv!(transpose(LowerTriangular(dA)), dy)
+            y = transpose(LowerTriangular(A)) \ x
+            @test y ≈ Array(dy)
         end
 
         A = rand(elty,m,m)
@@ -312,7 +383,7 @@ end # level 1 testset
         end
         if elty <: Complex
             @testset "her!" begin
-                dB = copy(dhA) 
+                dB = copy(dhA)
                 # perform rank one update
                 CuArrays.CUBLAS.her!('U',alpha,dx,dB)
                 B = (alpha*x)*x' + hA
@@ -324,7 +395,7 @@ end # level 1 testset
             end
 
             @testset "her2!" begin
-                dB = copy(dhA) 
+                dB = copy(dhA)
                 CuArrays.CUBLAS.her2!('U',alpha,dx,dy,dB)
                 B = (alpha*x)*y' + y*(alpha*x)' + hA
                 # move to host and compare upper triangles
@@ -360,6 +431,8 @@ end # level 1 testset
             # compare
             @test C1 ≈ h_C1
             @test C2 ≈ h_C2
+            @test_throws ArgumentError mul!(dhA, dhA, dsA)
+            @test_throws DimensionMismatch mul!(d_C1, d_A, dsA)
         end
 
         @testset "gemm" begin
@@ -418,7 +491,7 @@ end # level 1 testset
             end
         end
 
-        @testset "gemm_batched" begin 
+        @testset "gemm_batched" begin
             bd_C = CuArrays.CUBLAS.gemm_batched('N','N',bd_A,bd_B)
             for i in 1:length(bA)
                 bC = bA[i]*bB[i]
@@ -444,7 +517,7 @@ end # level 1 testset
             @test bC ≈ h_C
         end
 
-        @testset "gemm_strided_batched" begin 
+        @testset "gemm_strided_batched" begin
             bd_C = CuArrays.CUBLAS.gemm_strided_batched('N', 'N', bd_A, bd_B)
 
             for i in 1:nbatch
@@ -739,7 +812,7 @@ end # level 1 testset
             @test C ≈ h_C
         end
         if elty <: Complex
-            @testset "herk!" begin 
+            @testset "herk!" begin
                 d_C = CuArray(dhA)
                 CuArrays.CUBLAS.herk!('U','N',alpha,d_A,beta,d_C)
                 C = alpha*(A*A') + beta*C
@@ -758,7 +831,7 @@ end # level 1 testset
                 h_C = triu(C)
                 @test C ≈ h_C
             end
-            @testset "xt_herk!" begin 
+            @testset "xt_herk!" begin
                 d_C = CuArray(dhA)
                 CuArrays.CUBLAS.xt_herk!('U','N',alpha,d_A,beta,d_C)
                 C = alpha*(A*A') + beta*C

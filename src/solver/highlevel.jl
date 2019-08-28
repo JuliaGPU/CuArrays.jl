@@ -19,7 +19,7 @@ LinearAlgebra.qr!(A::CuMatrix{T}) where T = CuQR(geqrf!(A::CuMatrix{T})...)
 Base.size(A::CuQR) = size(A.factors)
 Base.size(A::CuQRPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
 CuArrays.CuMatrix(A::CuQRPackedQ) = orgqr!(copy(A.factors), A.τ)
-CuArrays.CuArray(A::CuQRPackedQ) = convert(CuMatrix, A)
+CuArrays.CuArray(A::CuQRPackedQ) = CuMatrix(A)
 Base.Matrix(A::CuQRPackedQ) = Matrix(CuMatrix(A))
 
 function Base.getproperty(A::CuQR, d::Symbol)
@@ -61,6 +61,10 @@ function Base.show(io::IO, F::CuQR)
     println(io)
     show(io, F.R)
 end
+
+# https://github.com/JuliaLang/julia/pull/32887
+LinearAlgebra.det(Q::CuQRPackedQ{<:Real}) = isodd(count(!iszero, Q.τ)) ? -1 : 1
+LinearAlgebra.det(Q::CuQRPackedQ) = prod(τ -> iszero(τ) ? one(τ) : -sign(τ)^2, Q.τ)
 
 # Singular Value Decomposition
 

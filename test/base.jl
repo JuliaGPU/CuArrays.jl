@@ -70,6 +70,14 @@ end
   @test testf((x)       -> sin.(x),      rand(2, 3))
   @test testf((x)       -> log.(x) .+ 1, rand(2, 3))
   @test testf((x)       -> 2x,           rand(2, 3))
+  @test testf((x)       -> x .^ 0,      rand(2, 3))
+  @test testf((x)       -> x .^ 1,      rand(2, 3))
+  @test testf((x)       -> x .^ 2,      rand(2, 3))
+  @test testf((x)       -> x .^ 3,      rand(2, 3))
+  @test testf((x)       -> x .^ 5,      rand(2, 3))
+  @test testf((x)       -> (z = Int32(5); x .^ z),      rand(2, 3))
+  @test testf((x)       -> (z = Float64(π); x .^ z),      rand(2, 3))
+  @test testf((x)       -> (z = Float32(π); x .^ z),      rand(Float32, 2, 3))
   @test testf((x, y)    -> x .+ y,       rand(2, 3), rand(1, 3))
   @test testf((z, x, y) -> z .= x .+ y,  rand(2, 3), rand(2, 3), rand(2))
   @test (CuArray{Ptr{Cvoid}}(undef, 1) .= C_NULL) == CuArray([C_NULL])
@@ -82,20 +90,25 @@ end
 end
 
 @testset "Cufunc" begin
-  gelu(x) = oftype(x, 0.5) * x * (1 + tanh(oftype(x, √(2/π))*(x + oftype(x, 0.044715) * x^3)))
+  gelu1(x) = oftype(x, 0.5) * x * (1 + tanh(oftype(x, √(2/π))*(x + oftype(x, 0.044715) * x^3)))
   sig(x) = one(x) / (one(x) + exp(-x))
-  f(x) = gelu(log(x)) * sig(x) * tanh(x)
+  f(x) = gelu1(log(x)) * sig(x) * tanh(x)
+  g(x) = x^7 - 2 * x^f(x^2) + 3
 
-  CuArrays.@cufunc gelu(x) = oftype(x, 0.5) * x * (1 + tanh(oftype(x, √(2/π))*(x + oftype(x, 0.044715) * x^3)))
+
+  CuArrays.@cufunc gelu1(x) = oftype(x, 0.5) * x * (1 + tanh(oftype(x, √(2/π))*(x + oftype(x, 0.044715) * x^3)))
   CuArrays.@cufunc sig(x) = one(x) / (one(x) + exp(-x))
-  CuArrays.@cufunc f(x) = gelu(log(x)) * sig(x) * tanh(x)
+  CuArrays.@cufunc f(x) = gelu1(log(x)) * sig(x) * tanh(x)
+  CuArrays.@cufunc g(x) = x^7 - 2 * x^f(x^2) + 3
 
-  @test :gelu ∈ CuArrays.cufuncs()
+  @test :gelu1 ∈ CuArrays.cufuncs()
   @test :sig ∈ CuArrays.cufuncs()
   @test :f ∈ CuArrays.cufuncs()
-  @test testf((x)  -> gelu.(x), rand(3,3))
+  @test :g ∈ CuArrays.cufuncs()
+  @test testf((x)  -> gelu1.(x), rand(3,3))
   @test testf((x)  -> sig.(x),  rand(3,3))
   @test testf((x)  -> f.(x),    rand(3,3))
+  @test testf((x)  -> g.(x),    rand(3,3))
 end
 
 # https://github.com/JuliaGPU/CUDAnative.jl/issues/223
@@ -108,7 +121,7 @@ end
   @test testf(x -> log.(x), rand(3,3))
   @test testf((x,xs) -> log.(x.+xs), Ref(1), rand(3,3))
 
-  if isdefined(CuArrays, :CUDNN)
+  if CuArrays.libcudnn !== nothing
     using NNlib
 
     @test testf(x -> logσ.(x), rand(5))
@@ -137,19 +150,22 @@ end
   @test collect(x)[] == 0.5
 end
 
-@testset "Slices" begin
+@testset "SubArray" begin
   @test testf(rand(5)) do x
     y = x[2:4]
     y .= 1
     x
   end
+
   @test testf(rand(5)) do x
     y = view(x, 2:4)
     y .= 1
     x
   end
+
   @test testf(x->view(x, :, 1:4, 3), rand(Float32, 5, 4, 3))
-  @allowscalar let x = cu(rand(Float32, 5, 4, 3))
+
+  let x = cu(rand(Float32, 5, 4, 3))
     @test_throws BoundsError view(x, :, :, 1:10)
 
     # Contiguous views should return new CuArray
@@ -169,9 +185,30 @@ end
     @test typeof(view(x, :, 1:2:4, 1)) <: SubArray
     @test typeof(view(x, 1:2:5, 1, 1)) <: SubArray
   end
+
+  # non-contiguous copyto!
+  let x = CuArrays.rand(4, 4)
+    y = view(x, 2:3, 2:3)
+
+    # to gpu
+    gpu = CuArray{eltype(y)}(undef, size(y))
+    copyto!(gpu, y)
+    @test Array(gpu) == Array(y)
+
+    # to cpu
+    cpu = Array{eltype(y)}(undef, size(y))
+    copyto!(cpu, y)
+    @test cpu == Array(y)
+  end
+
+  # bug in parentindices conversion
+  let x = CuArray{Int}(undef, 1, 1)
+    x[1,:] .= 42
+    @test Array(x)[1,1] == 42
+  end
 end
 
-@testset "Reshape" begin
+@testset "reshape" begin
   A = [1 2 3 4
        5 6 7 8]
   gA = reshape(CuArray(A),1,8)
@@ -189,7 +226,7 @@ end
 end
 
 @testset "Utilities" begin
-  t = @elapsed ret = CuArrays.@sync begin
+  t = Base.@elapsed ret = CuArrays.@sync begin
     # TODO: do something that takes a while on the GPU
     #       (need to wrap clock64 in CUDAnative for that)
     42
@@ -273,4 +310,11 @@ end
     @test testf(x->reverse!(x), rand(1000))
     @test testf(x->reverse!(x, 10), rand(1000))
     @test testf(x->reverse!(x, 10, 90), rand(1000))
+end
+
+@testset "permutedims" begin
+    @test testf(x->permutedims(x, [1, 2]), rand(4, 4))
+
+    inds = rand(1:100, 150, 150)
+    @test testf(x->permutedims(view(x, inds, :), (3, 2, 1)), rand(100, 100))
 end

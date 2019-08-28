@@ -30,7 +30,7 @@ function LinearAlgebra.BLAS.dotc(DX::CuArray{T}, DY::CuArray{T}) where T<:Union{
 end
 
 function LinearAlgebra.BLAS.dot(DX::CuArray{T}, DY::CuArray{T}) where T<:Union{ComplexF32,ComplexF64}
-    dotc(DX, DY)
+    BLAS.dotc(DX, DY)
 end
 
 function LinearAlgebra.BLAS.dotu(DX::CuArray{T}, DY::CuArray{T}) where T<:Union{ComplexF32,ComplexF64}
@@ -43,7 +43,7 @@ LinearAlgebra.norm(x::CublasArray) = nrm2(x)
 LinearAlgebra.BLAS.asum(x::CublasArray) = asum(length(x), x, 1)
 
 function LinearAlgebra.axpy!(alpha::Number, x::CuArray{T}, y::CuArray{T}) where T<:CublasFloat
-    length(x)==length(y) || throw(DimensionMismatch(""))
+    length(x)==length(y) || throw(DimensionMismatch("axpy arguments have lengths $(length(x)) and $(length(y))"))
     axpy!(length(x), convert(T,alpha), x, 1, y, 1)
 end
 
@@ -80,6 +80,50 @@ LinearAlgebra.mul!(Y::CuVector{T}, A::CuMatrix{T}, B::CuVector{T}) where T<:Cubl
 LinearAlgebra.lmul!(Y::CuVector{T}, A::LinearAlgebra.Transpose{<:Any, CuMatrix{T}}, B::CuVector{T}) where T<:CublasFloat = gemv_wrapper!(Y, 'T', A.parent, B)
 LinearAlgebra.lmul!(Y::CuVector{T}, A::LinearAlgebra.Adjoint{<:Any, CuMatrix{T}}, B::CuVector{T}) where T<:CublasFloat = gemv_wrapper!(Y, 'T', A.parent, B)
 LinearAlgebra.lmul!(Y::CuVector{T}, A::LinearAlgebra.Adjoint{<:Any, CuMatrix{T}}, B::CuVector{T}) where T<:CublasComplex = gemv_wrapper!(Y, 'C', A.parent, B)
+
+# TRSV
+
+function LinearAlgebra.ldiv!(
+    A::UpperTriangular{T, <:CuMatrix{T}},
+    x::CuVector{T},
+) where T<:CublasFloat
+    return CUBLAS.trsv!('U', 'N', 'N', parent(A), x)
+end
+
+function LinearAlgebra.ldiv!(
+    A::Adjoint{T, <:UpperTriangular{T, CuMatrix{T}}},
+    x::CuVector{T},
+) where {T<:CUBLAS.CublasFloat}
+    return CUBLAS.trsv!('U', 'C', 'N', parent(parent(A)), x)
+end
+
+function LinearAlgebra.ldiv!(
+    A::Transpose{T, <:UpperTriangular{T, CuMatrix{T}}},
+    x::CuVector{T},
+) where {T<:CUBLAS.CublasFloat}
+    return CUBLAS.trsv!('U', 'T', 'N', parent(parent(A)), x)
+end
+
+function LinearAlgebra.ldiv!(
+    A::LowerTriangular{T, <:CuMatrix{T}},
+    x::CuVector{T},
+) where T<:CublasFloat
+    return CUBLAS.trsv!('L', 'N', 'N', parent(A), x)
+end
+
+function LinearAlgebra.ldiv!(
+    A::Adjoint{T, <:LowerTriangular{T, CuMatrix{T}}},
+    x::CuVector{T},
+) where {T<:CUBLAS.CublasFloat}
+    return CUBLAS.trsv!('L', 'C', 'N', parent(parent(A)), x)
+end
+
+function LinearAlgebra.ldiv!(
+    A::Transpose{T, <:LowerTriangular{T, CuMatrix{T}}},
+    x::CuVector{T},
+) where {T<:CUBLAS.CublasFloat}
+    return CUBLAS.trsv!('L', 'T', 'N', parent(parent(A)), x)
+end
 
 
 
