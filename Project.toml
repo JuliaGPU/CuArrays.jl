@@ -19,6 +19,7 @@ Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
+[extras]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -27,10 +28,10 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Test", "FFTW", "ForwardDiff"]
 
 [compat]
-Adapt = "1.0"
-CUDAapi = "0.5.3, 0.6, 1.0"
-CUDAdrv = "3.0"
-CUDAnative = "2.0"
-GPUArrays = "0.7.1, 1.0"
-NNlib = "0.6"
 julia = "1.0"
+CUDAnative = "2.0"
+CUDAdrv = "3.0"
+CUDAapi = "0.5.3, 0.6, 1.0"
+NNlib = "0.6"
+GPUArrays = "0.7.1, 1.0"
+Adapt = "1.0"
