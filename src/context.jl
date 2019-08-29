@@ -68,10 +68,6 @@ function (cx::CUDACtx)(::typeof(broadcasted), f, args...)
   broadcasted(f, gargs...) |> x -> cache(cx, x)
 end
 
-function (cx::CUDACtx)(::typeof(getproperty), o, s::Symbol)
-  op = getproperty(o, s) |> x -> get_cached(cx, x)
-end
-
 function (cx::CUDACtx)(::typeof(broadcast), f, args...)
   gargs = map(x -> get_cached(cx, x), args)
   broadcast(f, gargs...) |> x -> cache(cx, x)
