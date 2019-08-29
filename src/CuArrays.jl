@@ -81,7 +81,7 @@ include("dnn/CUDNN.jl")
 
 include("nnlib.jl")
 
-include("context.jl")
+include("contextual.jl")
 
 include("deprecated.jl")
 
