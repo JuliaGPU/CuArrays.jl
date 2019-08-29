@@ -14,19 +14,19 @@ end
 CUDACtx() = CUDACtx(IdDict{Array,CuArray}())
 
 # Display fns for debugging, remove before committing
-function Base.summary(io::IO, c::CUDACtx)
+function Base.summary(io::IO, cx::CUDACtx)
   print(io, "IR Context for CUDA ")
-  summary(io, c.array_bank)
+  summary(io, cx.array_bank)
 end
 
-function Base.show(io::IO, c::CUDACtx)
+function Base.show(io::IO, cx::CUDACtx)
   print(io, "IR Context for CUDA ")
-  display(c.array_bank)
+  display(cx.array_bank)
 end
 
 @forward CUDACtx.array_bank Base.getindex, Base.iterate,
 			Base.setindex!, Base.empty!,
-			Base.length,
+			Base.length, Base.get!
 			Base.first, Base.last, Base.haskey
 
 function _resize!(a::Array, sz::NTuple{<:Any,Integer})
@@ -51,53 +51,47 @@ end
 cache(cx, f) = f
 
 for f in (:+, :-, :*, :/)
-  @eval function (c::CUDACtx)(::typeof($f), a::AbstractArray, b::AbstractArray)
-    ga = get_cached(array_bank, a)
-    gb = get_cached(array_bank, b)
-    cache(array_bank, $f(ga, gb))
+  @eval function (cx::CUDACtx)(::typeof($f), a::AbstractArray, b::AbstractArray)
+    ga = get_cached(cx, a)
+    gb = get_cached(cx, b)
+    cache(cx, $f(ga, gb))
   end
 end
 
-function get_cached(array_bank, arr::Array{T,N})::CuArray{T,N} where {T,N}
-  haskey(array_bank, arr) ?
-    array_bank[arr] :
-    (array_bank[arr] = CuArray(arr))
+function get_cached(cx::CUDACtx, arr::Array{T,N})::CuArray{T,N} where {T,N}
+  get!(cx, arr, CuArray(arr))
+end
+get_cached(cx::CUDACtx, x) = x
+
+function (cx::CUDACtx)(::typeof(broadcasted), f, args...)
+  gargs = map(x -> get_cached(cx, x), args)
+  broadcasted(f, gargs...) |> x -> cache(cx, x)
 end
 
-function (c::CUDACtx)(::typeof(broadcasted), f, args...)
-  gargs = map(x -> get_cached(array_bank, x), args)
-  broadcasted(f, gargs...) |> x -> cache(array_bank, x)
+function (cx::CUDACtx)(::typeof(getproperty), o, s::Symbol)
+  op = getproperty(o, s) |> x -> get_cached(cx, x)
 end
 
-function (c::CUDACtx)(::typeof(getproperty), o, s::Symbol)
-  getproperty(o, s) |> get_cached
-end
-
-function (c::CUDACtx)(::typeof(broadcast), f, args...)
-  gargs = map(x -> get_cached(array_bank, x), args)
-  broadcast(f, gargs...) |> x -> cache(array_bank, x)
-end
-
-function (c::CUDACtx)(::typeof(getfield), o, s::Symbol)
-  getfield(o, s) |> get_cached
+function (cx::CUDACtx)(::typeof(broadcast), f, args...)
+  gargs = map(x -> get_cached(cx, x), args)
+  broadcast(f, gargs...) |> x -> cache(cx, x)
 end
 
 function wrap_cuize(f)
-  @eval function (c::CUDACtx)(::typeof($f), args...)
-    gargs = map(get_cached, args)
-    cache(array_bank, $f(gargs...))
+  @eval function (cx::CUDACtx)(::typeof($f), args...)
+    gargs = map(x -> get_cached(cx, x), args)
+    cache(cx, $f(gargs...))
   end
 end
 
 wrap_cuize.((sum, similar, materialize))
 
-function (c::CUDACtx)(::typeof(reshape), arr, args...)
-  r = reshape(get_cached(arr), args...)
-  cache(array_bank, r)
+function (cx::CUDACtx)(::typeof(reshape), arr, args...)
+  r = reshape(get_cached(cx, arr), args...)
+  cache(cx, r)
 end
 
-@dynamo function (c::CUDACtx)(meta...)
-  meta == nothing && return
+@dynamo function (cx::CUDACtx)(meta...)
   ir = IR(meta...)
   ir == nothing && return
 
@@ -112,18 +106,6 @@ end
   return finish(pr)
 end
 
-# TODO: remove arbitrary things in one place
-get_cached(array_bank, t::Union{Type, UnitRange, Function, Broadcasted, Symbol, Module, Nothing, Missing, Ptr, CuPtr, T}) where {T <: Real} = t
-get_cached(array_bank, t::Union{Tuple, NamedTuple}) = map(get_cached, t)
-
-get_cached(array_bank, x::CuArray) = x
-
-function get_cached(x::T) where T
-  T <: Array && return get_cached(array_bank, x)
-  isstructtype(T) && return x
-  get_cached(array_bank, x)
-end
-
 """
   Disable `CUDACtx` for a function
 """
@@ -136,15 +118,14 @@ noop_pass.((get_cached, NNlib.check_spdf,
 
 for f in names(NNlib)
   getfield(NNlib, f) isa Function || continue
-  @eval function (c::CUDACtx)(::typeof($f), args...)
-    gargs = map(get_cached, args)
-    cache(array_bank, $f(gargs...))
+  @eval function (cx::CUDACtx)(::typeof($f), args...)
+    gargs = map(x -> get_cached(cx, x), args)
+    cache(cx, $f(gargs...))
   end
 end
 
 # Hold all the arrays related to the op
 # BitArray and friends would like an AbstractArray construct
-const array_bank = CUDACtx()
 
 """
   Creates a `cuda` context within which we travel
@@ -158,12 +139,12 @@ const array_bank = CUDACtx()
   end
   ```
 """
-function cuda(f)
-  out = array_bank(f)
-  for (x, cx) in array_bank
+function cuda(f, ctx = CUDACtx())
+  out = ctx(f)
+  for (x, cx) in ctx
     length(x) == length(cx) && continue
     refill!(x, cx)
   end
-  empty!(array_bank)
+  empty!(ctx)
   return out
 end
