@@ -50,14 +50,7 @@ function cache(cx, x::CuArray{T,N})::Array{T,N} where {T,N}
 end
 cache(cx, f) = f
 
-for f in (:+, :-, :*, :/)
-  @eval function (cx::CUDACtx)(::typeof($f), a::AbstractArray, b::AbstractArray)
-    ga = get_cached(cx, a)
-    gb = get_cached(cx, b)
-    cache(cx, $f(ga, gb))
-  end
-end
-
+# TODO: BitArray and friends would like an AbstractArray construct
 function get_cached(cx::CUDACtx, arr::Array{T,N})::CuArray{T,N} where {T,N}
   get!(cx, arr, CuArray(arr))
 end
@@ -68,19 +61,24 @@ function (cx::CUDACtx)(::typeof(broadcasted), f, args...)
   broadcasted(f, gargs...) |> x -> cache(cx, x)
 end
 
-function (cx::CUDACtx)(::typeof(broadcast), f, args...)
-  gargs = map(x -> get_cached(cx, x), args)
-  broadcast(f, gargs...) |> x -> cache(cx, x)
-end
+macro wrap_cuize(fs...)
+  ex = Expr[]
+  for f in fs
+    q = quote
+      function (cx::CUDACtx)(::typeof($f), args...)
+        gargs = map(x -> get_cached(cx, x), args)
+        cache(cx, $f(gargs...))
+      end
+    end
+    push!(ex, q)
+  end
 
-function wrap_cuize(f)
-  @eval function (cx::CUDACtx)(::typeof($f), args...)
-    gargs = map(x -> get_cached(cx, x), args)
-    cache(cx, $f(gargs...))
+  quote
+    $(ex...)
   end
 end
 
-wrap_cuize.((sum, similar, materialize))
+@wrap_cuize :+ :- :* :/ sum similar materialize
 
 function (cx::CUDACtx)(::typeof(reshape), arr, args...)
   r = reshape(get_cached(cx, arr), args...)
@@ -105,12 +103,15 @@ end
 """
   Disable `CUDACtx` for a function
 """
-function noop_pass(f)
-  @eval (c::CUDACtx)(::typeof($f), args...) = $f(args...)
+macro noop_pass(fs...)
+  ex = [:( (cx::CUDACtx)(::typeof($f), args...) = $f(args...) ) for f in fs]
+
+  quote
+    $(ex...)
+  end
 end
 
-noop_pass.((get_cached, NNlib.check_spdf,
-	))
+@noop_pass get_cached NNlib.check_spdf
 
 for f in names(NNlib)
   getfield(NNlib, f) isa Function || continue
@@ -119,9 +120,6 @@ for f in names(NNlib)
     cache(cx, $f(gargs...))
   end
 end
-
-# Hold all the arrays related to the op
-# BitArray and friends would like an AbstractArray construct
 
 """
   Creates a `cuda` context within which we travel
