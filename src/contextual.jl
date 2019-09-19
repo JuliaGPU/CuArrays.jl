@@ -56,9 +56,9 @@ function get_cached(cx::CUDACtx, arr::Array{T,N})::CuArray{T,N} where {T,N}
 end
 get_cached(cx::CUDACtx, x) = x
 
-function (cx::CUDACtx)(::typeof(broadcasted), f, args...)
+function (cx::CUDACtx)(::typeof(Base._mapreducedim!), f, op, args...)
   gargs = map(x -> get_cached(cx, x), args)
-  broadcasted(f, gargs...) |> x -> cache(cx, x)
+  Base._mapreducedim!(f, op, gargs...) |> x-> cache(cx, x)
 end
 
 macro wrap_cuize(fs...)
@@ -115,6 +115,14 @@ end
 
 for f in names(NNlib)
   getfield(NNlib, f) isa Function || continue
+  @eval function (cx::CUDACtx)(::typeof($f), args...)
+    gargs = map(x -> get_cached(cx, x), args)
+    cache(cx, $f(gargs...))
+  end
+end
+
+for f in names(LinearAlgebra)
+  getfield(LinearAlgebra, f) isa Function || continue
   @eval function (cx::CUDACtx)(::typeof($f), args...)
     gargs = map(x -> get_cached(cx, x), args)
     cache(cx, $f(gargs...))
