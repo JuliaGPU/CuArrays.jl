@@ -5,7 +5,9 @@ using CuArrays.NNlib
 @testset "simple ops" begin
   W = rand(5, 5)
   b = rand(5)
-  @test cuda(() -> W*b) ≈ W*b
+  op = cuda(() -> W*b)
+  @test op ≈ W*b
+  @test op isa Array
 
   a = rand(10)
   b = rand(10)
