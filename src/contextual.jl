@@ -61,7 +61,7 @@ function (cx::CUDACtx)(::typeof(Base._mapreducedim!), f, op, args...)
   Base._mapreducedim!(f, op, gargs...) |> x-> cache(cx, x)
 end
 
-macro wrap_cuize(fs...)
+macro contextual(fs...)
   ex = Expr[]
   for f in fs
     q = quote
@@ -78,7 +78,7 @@ macro wrap_cuize(fs...)
   end
 end
 
-@wrap_cuize :+ :- :* :/ sum similar materialize
+@contextual :+ :- :* :/ sum similar materialize
 
 function (cx::CUDACtx)(::typeof(reshape), arr, args...)
   r = reshape(get_cached(cx, arr), args...)
