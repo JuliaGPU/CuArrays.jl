@@ -3,12 +3,36 @@ import GPUArrays: allowscalar, @allowscalar
 
 ## unified memory indexing
 
-# TODO: needs to think about coherency -- otherwise this might crash since it doesn't sync
-#       also, this optim would be relevant for CuArray<->Array memcpy as well.
+const coherent = Ref(true)
+
+# toggle coherency based on API calls
+function set_coherency(apicall)
+  # TODO: whitelist
+  coherent[] = false
+  return
+end
+
+function force_coherency()
+  # TODO: not on newer hardware with certain flags
+
+  if CUDAdrv.apicall_hook[] !== set_coherency
+    # we didn't have our API call hook in place, all bets are off
+    coherent[] = false
+  end
+
+  if !coherent[]
+    CUDAdrv.synchronize()
+    coherent[] = true
+  elseif CUDAdrv.apicall_hook[] === nothing
+    # nobody else is hooking for CUDA API calls, so we can safely install ours
+    CUDAdrv.apicall_hook[] = set_coherency
+  end
+end
 
 function GPUArrays._getindex(xs::CuArray{T}, i::Integer) where T
   buf = buffer(xs)
   if isa(buf, Mem.UnifiedBuffer)
+    force_coherency()
     ptr = convert(Ptr{T}, buffer(xs))
     unsafe_load(ptr, i)
   else
@@ -21,6 +45,7 @@ end
 function GPUArrays._setindex!(xs::CuArray{T}, v::T, i::Integer) where T
   buf = buffer(xs)
   if isa(buf, Mem.UnifiedBuffer)
+    force_coherency()
     ptr = convert(Ptr{T}, buffer(xs))
     unsafe_store!(ptr, v, i)
   else
