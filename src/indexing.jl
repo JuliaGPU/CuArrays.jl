@@ -44,7 +44,7 @@ Base.getindex(xs::CuArray, bools::AbstractArray{Bool}) = getindex(xs, CuArray(bo
 
 function Base.getindex(xs::CuArray{T}, bools::CuArray{Bool}) where {T}
   bools = reshape(bools, prod(size(bools)))
-  indices = cumsum(bools)  # unique indices for elements that are true
+  indices = @sync cumsum(bools)  # unique indices for elements that are true
 
   n = GPUArrays._getindex(indices, length(indices))  # number that are true
   ys = CuArray{T}(undef, n)
@@ -82,9 +82,9 @@ end
 ## findall
 
 function Base.findall(bools::CuArray{Bool})
-    indices = cumsum(bools)
+    indices = @sync cumsum(bools)
 
-    n = _getindex(indices, length(indices))
+    n = GPUArrays._getindex(indices, length(indices))
     ys = CuArray{Int}(undef, n)
 
     if n > 0
