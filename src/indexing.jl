@@ -3,37 +3,21 @@ import GPUArrays: allowscalar, @allowscalar
 
 ## unified memory indexing
 
-const coherent = Ref(true)
-
-# toggle coherency based on API calls
-function set_coherency(apicall)
-  # TODO: whitelist
-  coherent[] = false
-  return
-end
-
-function force_coherency()
-  # TODO: not on newer hardware with certain flags
-
-  if CUDAdrv.apicall_hook[] !== set_coherency
-    # we didn't have our API call hook in place, all bets are off
-    coherent[] = false
-  end
-
-  if !coherent[]
-    CUDAdrv.synchronize()
-    coherent[] = true
-  elseif CUDAdrv.apicall_hook[] === nothing
-    # nobody else is hooking for CUDA API calls, so we can safely install ours
-    CUDAdrv.apicall_hook[] = set_coherency
-  end
-end
+# > Simultaneous access to managed memory from the CPU and GPUs of compute capability lower
+# > than 6.0 is not possible. This is because pre-Pascal GPUs lack hardware page faulting,
+# > so coherence can’t be guaranteed. On these GPUs, an access from the CPU while a kernel
+# > is running will cause a segmentation fault.
+#
+# > On Pascal and later GPUs, the CPU and the GPU can simultaneously access managed memory,
+# > since they can both handle page faults; however, it is up to the application developer
+# > to ensure there are no race conditions caused by simultaneous accesses.
+const coherent = Ref(false)
 
 function GPUArrays._getindex(xs::CuArray{T}, i::Integer) where T
   buf = buffer(xs)
   if isa(buf, Mem.UnifiedBuffer)
-    force_coherency()
-    ptr = convert(Ptr{T}, buffer(xs))
+    coherent[] || CUDAdrv.synchronize()
+    ptr = convert(Ptr{T}, buf)
     unsafe_load(ptr, i)
   else
     val = Array{T}(undef)
@@ -45,8 +29,8 @@ end
 function GPUArrays._setindex!(xs::CuArray{T}, v::T, i::Integer) where T
   buf = buffer(xs)
   if isa(buf, Mem.UnifiedBuffer)
-    force_coherency()
-    ptr = convert(Ptr{T}, buffer(xs))
+    coherent[] || CUDAdrv.synchronize()
+    ptr = convert(Ptr{T}, buf)
     unsafe_store!(ptr, v, i)
   else
     copyto!(xs, i, T[v], 1, 1)
