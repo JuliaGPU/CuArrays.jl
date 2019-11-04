@@ -80,24 +80,19 @@ pool:split:
 
 # reverse tests
 
-# NOTE: reverse testing is tricky because of Manifests. we instantiate both, give priority
-#       to this package's Manifest, and manually run tests outside of the test environment.
-#       that means we have to manually install Flux' test dependencies though.
+# NOTE: not using the Manifest (develop instead of instantiate) due to Pkg.jl#1423
 
 flux:
   extends: .julia:1.2
   tags:
     - nvidia
   script:
-    - export FLUX="$HOME/.julia/dev/Flux"
     - julia -e 'using Pkg;
-                Pkg.develop("Flux");'
-    - julia --project -e 'using Pkg;
-                          Pkg.instantiate()'
-    - julia --project=$FLUX -e 'using Pkg;
-                                Pkg.instantiate();
-                                Pkg.add(["Documenter"])'
-    - JULIA_LOAD_PATH=".:$FLUX::" julia $FLUX/test/runtests.jl
+                Pkg.develop(PackageSpec(path=pwd()));
+                Pkg.build();'
+    - julia -e 'using Pkg;
+                Pkg.add("Flux");
+                Pkg.test("Flux");'
   allow_failure: true
 
 
