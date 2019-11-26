@@ -10,6 +10,10 @@
 
 using LinearAlgebra: copy_transpose!
 
+function makeworkspace(size)
+  return CuVector{UInt8}(undef, size())
+end
+
 function params(w::CuVector, input, hidden, n = 1)
   slice(offset, shape) = reshape(view(w, offset.+(1:prod(shape))), shape)
   wx = slice(0, (input, hidden*n))
@@ -113,7 +117,7 @@ function forward(rnn::RNNDesc{T}, x::CuArray{T}, h_::CuArray{T}, c_ = nothing, t
   y = x isa AbstractVector ? similar(x, rnn.hidden) : similar(x, rnn.hidden, size(x, 2))
   ho = similar(h)
   ydesc = xDesc(y)
-  workspace = CuVector{UInt8}(undef, cudnnGetRNNWorkspaceSize(rnn, seqLength, xdesc))
+  workspace = makeworkspace(() -> cudnnGetRNNWorkspaceSize(rnn, seqLength, xdesc))
   reserve = train == Val{true} ?
     CuVector{UInt8}(undef, cudnnGetRNNTrainingReserveSize(rnn, seqLength, xdesc)) :
     nothing
@@ -142,7 +146,7 @@ function backwardData(rnn::RNNDesc{T}, y, dy_, dho, dco, h, c, reserve) where T
   dx = y isa AbstractVector ? similar(dy, rnn.input) : similar(dy, rnn.input, size(dy, 2))
   dh = similar(h)
   dc = c == nothing ? nothing : similar(c)
-  workspace = CuVector{UInt8}(undef, cudnnGetRNNWorkspaceSize(rnn, 1, xDesc(dx)))
+  workspace = makeworkspace(() -> cudnnGetRNNWorkspaceSize(rnn, 1, xDesc(dx)))
   cudnnRNNBackwardData(handle(), rnn, 1,
     yd, y, yd, dy, hDesc(dho)..., hDesc(dco)...,
     FilterDesc(T, (1, 1, length(rnn.params))), rnn.params,
@@ -157,7 +161,7 @@ backwardData(rnn, y, dy, dho, hx, reserve) =
 
 function backwardWeights(rnn::RNNDesc{T}, x, h, y, reserve) where T
   dw = zero(rnn.params)
-  workspace = CuVector{UInt8}(undef, cudnnGetRNNWorkspaceSize(rnn, 1, xDesc(x)))
+  workspace = makeworkspace(() -> cudnnGetRNNWorkspaceSize(rnn, 1, xDesc(x)))
   cudnnRNNBackwardWeights(handle(), rnn, 1,
     xDesc(x), x, hDesc(h)..., xDesc(y), y,
     workspace, length(workspace),
