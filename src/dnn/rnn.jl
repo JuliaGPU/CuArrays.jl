@@ -11,7 +11,14 @@
 using LinearAlgebra: copy_transpose!
 
 function makeworkspace(size)
-  return CuVector{UInt8}(undef, size())
+  sz = size()
+  local ws
+  while true
+    ws = CuVector{UInt8}(undef, sz)
+    sz = size()
+    length(ws) >= sz && break
+  end
+  return ws
 end
 
 function params(w::CuVector, input, hidden, n = 1)
