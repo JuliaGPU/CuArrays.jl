@@ -87,7 +87,7 @@ cuda:9.2:
 platform:arm64:
   image: nvcr.io/nvidia/l4t-base:r32.2.1
   extends:
-    - .julia:1.2
+    - .julia:nightly
     - .test
   tags:
     - nvidia-arm64
