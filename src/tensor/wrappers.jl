@@ -220,7 +220,8 @@ function contraction!(
     descB = CuTensorDescriptor(B; op = opB)
     descC = CuTensorDescriptor(C; op = opC)
     # for now, D must be identical to C (and thus, descD must be identical to descC)
-    computeType = cutensorComputeType(compute_type) #CUTENSOR_R_MIN_64F #TODO cudaDataType(T)
+    computeType = cutensorComputeType(compute_type)
+    T     = eltype(C)
     modeA = collect(Cint, Ainds)
     modeB = collect(Cint, Binds)
     modeC = collect(Cint, Cinds)
@@ -251,8 +252,8 @@ function contraction!(
             cutensorInitContractionPlan(handle(), plan, desc, find, sizeof(workspace))
 
             cutensorContraction(handle(), plan,
-                                compute_type[alpha], A, B,
-                                compute_type[beta],  C, C,
+                                T[alpha], A, B,
+                                T[beta],  C, C,
                                 workspace, sizeof(workspace), stream)
         end
     return C
