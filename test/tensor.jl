@@ -389,18 +389,16 @@ end
 end
 
 @testset "Contraction" begin
-    eltypes = ( #(Float16, Float16, Float16), # works for some
-                # (Float16, Float16, Float32), # works for some but claims otherwise
+    eltypes = ( # (Float16, Float16, Float32), # works for some but claims otherwise
                 (Float32, Float32, Float32, Float32),
-                #(Float32, Float32, Float32, Float16), # didn't work for some reason
+                (Float32, Float32, Float32, Float16),
                 #(Float32, ComplexF32, ComplexF32),
                 #(ComplexF32, Float32, ComplexF32),
                 # (Float32, Float32, Float64), # does not work
                 (Float64, Float64, Float64, Float64),
                 (Float64, Float64, Float64, Float32),
-                #(Float64, ComplexF64, ComplexF64),
-                #(ComplexF64, Float64, ComplexF64),
-                # (ComplexF16, ComplexF16, ComplexF16), # does not work
+                (Float64, ComplexF64, ComplexF64, ComplexF64),
+                (ComplexF64, Float64, ComplexF64, ComplexF64),
                 (ComplexF32, ComplexF32, ComplexF32, ComplexF32), # works for some
                 # (ComplexF32, ComplexF32, ComplexF64), # does not work
                 (ComplexF64, ComplexF64, ComplexF64, ComplexF64), # works for some
