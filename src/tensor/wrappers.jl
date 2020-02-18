@@ -207,9 +207,10 @@ function contraction!(
     alpha::Number, A::CuArray, Ainds::ModeType, opA::cutensorOperator_t,
                    B::CuArray, Binds::ModeType, opB::cutensorOperator_t,
     beta::Number,  C::CuArray, Cinds::ModeType, opC::cutensorOperator_t,
-                                                opOut::cutensorOperator_t,
+                                                opOut::cutensorOperator_t;
     pref::cutensorWorksizePreference_t=CUTENSOR_WORKSPACE_RECOMMENDED,
-    algo::cutensorAlgo_t=CUTENSOR_ALGO_DEFAULT, stream::CuStream=CuDefaultStream())
+    algo::cutensorAlgo_t=CUTENSOR_ALGO_DEFAULT, stream::CuStream=CuDefaultStream(),
+    compute_type::Type=eltype(C))
 
     !is_unary(opA)    && throw(ArgumentError("opA must be a unary op!"))
     !is_unary(opB)    && throw(ArgumentError("opB must be a unary op!"))
@@ -219,8 +220,7 @@ function contraction!(
     descB = CuTensorDescriptor(B; op = opB)
     descC = CuTensorDescriptor(C; op = opC)
     # for now, D must be identical to C (and thus, descD must be identical to descC)
-    T = eltype(C)
-    computeType = cutensorComputeType(T) #CUTENSOR_R_MIN_64F #TODO cudaDataType(T)
+    computeType = cutensorComputeType(compute_type) #CUTENSOR_R_MIN_64F #TODO cudaDataType(T)
     modeA = collect(Cint, Ainds)
     modeB = collect(Cint, Binds)
     modeC = collect(Cint, Cinds)
@@ -251,8 +251,8 @@ function contraction!(
             cutensorInitContractionPlan(handle(), plan, desc, find, sizeof(workspace))
 
             cutensorContraction(handle(), plan,
-                                T[alpha], A, B,
-                                T[beta],  C, C,
+                                compute_type[alpha], A, B,
+                                compute_type[beta],  C, C,
                                 workspace, sizeof(workspace), stream)
         end
     return C
