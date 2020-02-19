@@ -389,7 +389,7 @@ end
 end
 
 @testset "Contraction" begin
-    eltypes = ( # (Float16, Float16, Float32), # works for some but claims otherwise
+    eltypes = ( (Float16, Float16, Float16, Float32), # works for some but claims otherwise
                 (Float32, Float32, Float32, Float32),
                 (Float32, Float32, Float32, Float16),
                 #(Float32, ComplexF32, ComplexF32),
@@ -425,7 +425,7 @@ end
             ipB = invperm(pB)
             pC = randperm(NoA + NoB)
             ipC = invperm(pC)
-   	    compute_rtol = real(eltyCompute) == Float16 ? 1e-2 : (real(eltyCompute) == Float32 ? 1e-4 : 1e-6)  
+	    compute_rtol = (real(eltyCompute) == Float16 || real(eltyC) == Float16) ? 1e-2 : (real(eltyCompute) == Float32 ? 1e-4 : 1e-6)  
             dimsA = [dimsoA; dimsc][pA]
             indsA = [indsoA; indsc][pA]
             dimsB = [dimsc; dimsoB][pB]
@@ -472,48 +472,49 @@ end
             @test mD ≈ α * mA * mB + β * mC rtol=compute_rtol
                             
             # with CuTensor objects
-            ctA = CuTensor(dA, indsA)
-            ctB = CuTensor(dB, indsB)
-            ctC = CuTensor(dC, indsC)
-            ctC = LinearAlgebra.mul!(ctC, ctA, ctB)
-            C2, C2inds = collect(ctC)
-            mC = reshape(permutedims(C2, ipC), (loA, loB))
-            @test mC ≈ mA * mB
-            ctC = ctA * ctB
-            C2, C2inds = collect(ctC)
-            pC2 = convert.(Int, indexin(convert.(Char, C2inds), [indsoA; indsoB]))
-            mC = reshape(permutedims(C2, invperm(pC2)), (loA, loB))
-            @test mC ≈ mA * mB
-
+            if eltyCompute != Float32 && eltyC != Float16
+		ctA = CuTensor(dA, indsA)
+		ctB = CuTensor(dB, indsB)
+		ctC = CuTensor(dC, indsC)
+		ctC = LinearAlgebra.mul!(ctC, ctA, ctB)
+		C2, C2inds = collect(ctC)
+		mC = reshape(permutedims(C2, ipC), (loA, loB))
+		@test mC ≈ mA * mB
+		ctC = ctA * ctB
+		C2, C2inds = collect(ctC)
+		pC2 = convert.(Int, indexin(convert.(Char, C2inds), [indsoA; indsoB]))
+		mC = reshape(permutedims(C2, invperm(pC2)), (loA, loB))
+		@test mC ≈ mA * mB
+	    end
             # with conjugation flag for complex arguments
             if !((NoA, NoB, Nc) in ((1,1,3), (1,2,3), (3,1,2)))
             # not supported for these specific cases for unknown reason
-                if eltyA <: Complex && eltyCompute == eltyC
-                    opA = CUTENSOR.CUTENSOR_OP_CONJ
-                    opB = CUTENSOR.CUTENSOR_OP_IDENTITY
+                if eltyA <: Complex
+                    opA   = CUTENSOR.CUTENSOR_OP_CONJ
+                    opB   = CUTENSOR.CUTENSOR_OP_IDENTITY
                     opOut = CUTENSOR.CUTENSOR_OP_IDENTITY
-                    dC = CUTENSOR.contraction!(1, dA, indsA, opA, dB, indsB, opB,
-                                               0, dC, indsC, opC, opOut, compute_type=eltyCompute)
-                    C = collect(dC)
-                    mC = reshape(permutedims(C, ipC), (loA, loB))
+		    dC    = CUTENSOR.contraction!(one(eltyCompute), dA, indsA, opA, dB, indsB, opB,
+					       zero(eltyCompute), dC, indsC, opC, opOut, compute_type=eltyCompute)
+                    C     = collect(dC)
+                    mC    = reshape(permutedims(C, ipC), (loA, loB))
                     @test mC ≈ conj(mA) * mB rtol=compute_rtol
                 end
-                if eltyB <: Complex && eltyCompute == eltyC
+                if eltyB <: Complex
                     opA = CUTENSOR.CUTENSOR_OP_IDENTITY
                     opB = CUTENSOR.CUTENSOR_OP_CONJ
                     opOut = CUTENSOR.CUTENSOR_OP_IDENTITY
-                    dC = CUTENSOR.contraction!(1, dA, indsA, opA, dB, indsB, opB,
-                                                0, dC, indsC, opC, opOut, compute_type=eltyCompute)
+		    dC = CUTENSOR.contraction!(one(eltyCompute), dA, indsA, opA, dB, indsB, opB,
+                                                zero(eltyCompute), dC, indsC, opC, opOut, compute_type=eltyCompute)
                     C = collect(dC)
                     mC = reshape(permutedims(C, ipC), (loA, loB))
                     @test mC ≈ mA*conj(mB) rtol=compute_rtol
                 end
-                if eltyA <: Complex && eltyB <: Complex && eltyCompute == eltyC
+                if eltyA <: Complex && eltyB <: Complex
                     opA = CUTENSOR.CUTENSOR_OP_CONJ
                     opB = CUTENSOR.CUTENSOR_OP_CONJ
                     opOut = CUTENSOR.CUTENSOR_OP_IDENTITY
-                    dC = CUTENSOR.contraction!(1, dA, indsA, opA, dB, indsB, opB,
-                                                0, dC, indsC, opC, opOut, compute_type=eltyCompute)
+                    dC = CUTENSOR.contraction!(one(eltyCompute), dA, indsA, opA, dB, indsB, opB,
+					       zero(eltyCompute), dC, indsC, opC, opOut, compute_type=eltyCompute)
                     C = collect(dC)
                     mC = reshape(permutedims(C, ipC), (loA, loB))
                     @test mC ≈ conj(mA)*conj(mB) rtol=compute_rtol

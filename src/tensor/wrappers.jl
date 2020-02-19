@@ -61,7 +61,6 @@ function elementwiseTrinary!(
     descC = CuTensorDescriptor(C; op = opC)
     @assert size(C) == size(D) && strides(C) == strides(D)
     descD = descC # must currently be identical
-    #typeCompute = cudaDataType(T)
     typeCompute = cudaDataType(T)
     modeA = collect(Cint, Ainds)
     modeB = collect(Cint, Binds)
@@ -221,7 +220,9 @@ function contraction!(
     descC = CuTensorDescriptor(C; op = opC)
     # for now, D must be identical to C (and thus, descD must be identical to descC)
     computeType = cutensorComputeType(compute_type)
-    T     = eltype(C)
+    # fix this and use a look-up table
+    #T     = sizeof(compute_type) < sizeof(eltype(C)) ? eltype(C) : compute_type
+    T     = sizeof(compute_type) < sizeof(eltype(C)) ? eltype(C) : compute_type
     modeA = collect(Cint, Ainds)
     modeB = collect(Cint, Binds)
     modeC = collect(Cint, Cinds)
@@ -252,8 +253,8 @@ function contraction!(
             cutensorInitContractionPlan(handle(), plan, desc, find, sizeof(workspace))
 
             cutensorContraction(handle(), plan,
-                                T[alpha], A, B,
-                                T[beta],  C, C,
+				T[convert(T, alpha)], A, B,
+                                T[convert(T, beta)],  C, C,
                                 workspace, sizeof(workspace), stream)
         end
     return C
