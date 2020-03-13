@@ -43,6 +43,15 @@ version() = VersionNumber(cublasGetProperty(CUDAapi.MAJOR_VERSION),
                           cublasGetProperty(CUDAapi.MINOR_VERSION),
                           cublasGetProperty(CUDAapi.PATCH_LEVEL))
 
+macro allocates(ex)
+  quote
+    CuArrays.extalloc(check=err->isa(err, CUBLASError) &&
+                                 err.code == CUBLAS_STATUS_ALLOC_FAILED) do
+      $(esc(ex))
+    end
+  end
+end
+
 # Level 1
 ## copy
 for (fname, elty) in ((:cublasDcopy_v2,:Float64),
@@ -1784,7 +1793,8 @@ for (fname, elty) in
             lda = max(1,stride(A,2))
             ldb = max(1,stride(B,2))
             ldc = max(1,stride(C,2))
-            $fname(xt_handle(), cutransA,cutransB, m, n, k, [alpha], A, lda, B, ldb, [beta],C, ldc)
+            @allocates $fname(xt_handle(), cutransA,cutransB, m, n, k, [alpha], A, lda, B,
+                              ldb, [beta],C, ldc)
             C
         end
         function xt_gemm(transA::Char,
@@ -1881,8 +1891,8 @@ for (fname, elty) in ((:cublasXtDsymm,:Float64),
             lda = max(1,stride(A,2))
             ldb = max(1,stride(B,2))
             ldc = max(1,stride(C,2))
-            $fname(xt_handle(), cuside, cuuplo, m, n, [alpha], A, lda, B, ldb,
-                   [beta], C, ldc)
+            @allocates $fname(xt_handle(), cuside, cuuplo, m, n, [alpha], A, lda, B, ldb,
+                             [beta], C, ldc)
             C
         end
         function xt_symm(side::Char,
@@ -1970,7 +1980,8 @@ for (fname, elty) in ((:cublasXtDsyrkx,:Float64),
            lda = max(1,stride(A,2))
            ldb = max(1,stride(B,2))
            ldc = max(1,stride(C,2))
-           $fname(xt_handle(), cuuplo, cutrans, n, k, [alpha], A, lda, B, ldb, [beta], C, ldc)
+           @allocates $fname(xt_handle(), cuuplo, cutrans, n, k, [alpha], A, lda, B, ldb,
+                             [beta], C, ldc)
            C
         end
     end
@@ -2055,7 +2066,8 @@ for (fname, elty1, elty2) in ((:cublasXtZher2k,:ComplexF64,:Float64),
            lda = max(1,stride(A,2))
            ldb = max(1,stride(B,2))
            ldc = max(1,stride(C,2))
-           $fname(xt_handle(), cuuplo, cutrans, n, k, [alpha], A, lda, B, ldb, [beta], C, ldc)
+           @allocates $fname(xt_handle(), cuuplo, cutrans, n, k, [alpha], A, lda, B, ldb,
+                             [beta], C, ldc)
            C
        end
        function xt_her2k(uplo::Char,
@@ -2111,7 +2123,8 @@ for (mmname, smname, elty) in
             lda = max(1,stride(A,2))
             ldb = max(1,stride(B,2))
             ldc = max(1,stride(C,2))
-            $mmname(xt_handle(), cuside, cuuplo, cutransa, cudiag, m, n, [alpha], A, lda, B, ldb, C, ldc)
+            @allocates $mmname(xt_handle(), cuside, cuuplo, cutransa, cudiag, m, n, [alpha],
+                               A, lda, B, ldb, C, ldc)
             C
         end
         function xt_trmm(side::Char,
