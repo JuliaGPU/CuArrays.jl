@@ -9,12 +9,19 @@ using Crayons
 
 using Clang
 
-function wrap(name, headers...; wrapped_headers=headers, library="lib$name()", defines=[])
+function wrap(name, headers...; wrapped_headers=headers, library="lib$name()", defines=[], includes=[])
     include_dirs = map(dir->joinpath(dir, "include"), find_toolkit())
     filter!(isdir, include_dirs)
-
+    
     clang_args = String[]
+    for headers in find_std_headers()
+        push!(clang_args, "-I"*header)
+    end
     append!(clang_args, map(dir->"-I$dir", include_dirs))
+    for include in includes
+        append!(clang_args, ["-I" * include])
+    end
+    
     for define in defines
         if isa(define, Pair)
             append!(clang_args, ["-D", "$(first(define))=$(last(define))"])
@@ -488,7 +495,9 @@ function process(name, headers...; kwargs...)
     ## move to destination
 
     for src in (output_file, common_file)
-        dst = joinpath(dirname(dirname(@__DIR__)), "src", name[3:end], src)
+        dst_name =  occursin("dalibmg", name) ? name : name[3:end]
+        dst = joinpath(dirname(dirname(@__DIR__)), "src", dst_name, src)
+        @show name, src, dst
         cp(src, dst; force=true)
     end
 
@@ -521,9 +530,17 @@ function main()
         process(name, headers...; kwargs...)
     end
 
+    process_if_existing("cudalibmg", "cudalibmg.h";
+                        wrapped_headers=["cudalibmg.h", "cudalibmg/types.h"])
+
     process_if_existing("cublas", "cublas_v2.h", "cublasXt.h";
                         wrapped_headers=["cublas_v2.h", "cublas_api.h", "cublasXt.h"],
                         defines=["CUBLASAPI"=>""])
+
+    incs = [get(ENV, "CUDALIBMG_INCLUDE", cuda_include)]
+    @show incs
+    process_if_existing("cublasmg", "cublasMg.h";
+                        wrapped_headers=["cublasMg.h", "cublasmg/types.h"], includes = incs)
 
     process_if_existing("cufft", "cufft.h")
 
@@ -538,6 +555,7 @@ function main()
 
     process_if_existing("cutensor", "cutensor.h";
                         wrapped_headers=["cutensor.h", "cutensor/types.h"])
+
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
