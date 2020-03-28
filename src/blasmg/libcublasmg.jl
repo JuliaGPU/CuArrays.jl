@@ -1,7 +1,6 @@
 # Julia wrapper for header: cublasMg.h
 # Automatically generated using Clang.jl
 
-
 @checked function cublasMgGemm(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
     initialize_api()
     @runtime_ccall((:cublasMgGemm, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}, Ptr{CUstream}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)

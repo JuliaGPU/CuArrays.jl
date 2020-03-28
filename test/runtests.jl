@@ -54,6 +54,7 @@ include("blas.jl")
 include("rand.jl")
 include("fft.jl")
 =#
+include("blasmg.jl")
 include("sparse.jl")
 include("solver.jl")
 include("sparse_solver.jl")
@@ -64,7 +65,6 @@ include("iterator.jl")
 include("forwarddiff.jl")
 include("nnlib.jl")
 include("statistics.jl")
-#let p, cmd = `LD_PRELOAD=/usr/local/cuda/lib64/libcudart.so $(Base.julia_cmd()) blasmg.jl`
 let p, cmd = `$(Base.julia_cmd()) blasmg.jl`
     p = run(pipeline(cmd, stdout = stdout, stderr = stderr), wait = false)
     if !success(p)

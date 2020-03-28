@@ -1,5 +1,5 @@
 function cublasMgCreate()
-    handle = Ref{cublasMgHandle_t}()
+    handle = Ref{cublasMgHandle_t}(C_NULL)
     cublasMgCreate(handle)
     return handle[]
 end
