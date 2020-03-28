@@ -29,6 +29,8 @@ const __libcufft = Ref{String}()
 const __libcurand = Ref{String}()
 const __libcudnn = Ref{Union{Nothing,String}}(nothing)
 const __libcutensor = Ref{Union{Nothing,String}}(nothing)
+const __libcublasmg = Ref{Union{Nothing,String}}(nothing)
+const __libcudalibmg = Ref{Union{Nothing,String}}(nothing)
 
 libcublas() = @after_init(__libcublas[])
 libcusparse() = @after_init(__libcusparse[])
@@ -48,9 +50,25 @@ function libcutensor()
     end
 end
 
-export has_cudnn, has_cutensor
+function libcudalibmg()
+    @after_init begin
+        @assert has_cudalibmg() "This functionality is unavailabe as cudaLibMg is missing."
+        __libcudalibmg[]
+    end
+end
+
+function libcublasmg()
+    @after_init begin
+        @assert has_cublasmg() "This functionality is unavailabe as CUBLASMG is missing."
+        __libcublasmg[]
+    end
+end
+
+export has_cudnn, has_cutensor, has_cublasmg, has_cudalibmg
 has_cudnn() = @after_init(__libcudnn[]) !== nothing
 has_cutensor() = @after_init(__libcutensor[]) !== nothing
+has_cublasmg() = @after_init(__libcublasmg[]) !== nothing
+has_cudalibmg() = @after_init(__libcudalibmg[]) !== nothing
 
 
 ## discovery
@@ -123,6 +141,7 @@ function use_artifact_cuda()
             end
         end
 
+        Libdl.dlopen("/usr/local/cuda/lib64/libcudart.so")
         handle[] = get_library(artifact.dir, name)
         Libdl.dlopen(handle[])
     end
@@ -130,6 +149,8 @@ function use_artifact_cuda()
     @debug "Using CUDA $(__version[]) from an artifact at $(artifact.dir)"
     use_artifact_cudnn(artifact.release)
     use_artifact_cutensor(artifact.release)
+    use_artifact_cublasmg(artifact.release)
+    use_artifact_cudalibmg(artifact.release)
     return true
 end
 
@@ -162,6 +183,8 @@ function use_local_cuda()
     @debug "Found local CUDA $(cuda_version) at $(join(cuda_dirs, ", "))"
     use_local_cudnn(cuda_dirs)
     use_local_cutensor(cuda_dirs)
+    use_local_cublasmg(cuda_dirs)
+    use_local_cudalibmg(cuda_dirs)
     return true
 end
 
@@ -228,10 +251,71 @@ function use_local_cutensor(cuda_dirs)
     return true
 end
 
+# CUBLASMG
+
+const cublasmg_artifacts = Dict(
+    v"10.2" => ()->artifact"CUBLASMG+CUDA10.2",
+    v"10.1" => ()->artifact"CUBLASMG+CUDA10.1",
+)
+
+function use_artifact_cublasmg(release)
+    artifact_dir = try
+        cublasmg_artifacts[release]()
+    catch ex
+        @debug "Could not use CUBLASMG from artifacts" exception=(ex, catch_backtrace())
+        return false
+    end
+
+    __libcublasmg[] = get_library(artifact_dir, "cublasmg")
+    Libdl.dlopen(__libcublasmg[])
+    @debug "Using CUBLASMG from an artifact at $(artifact_dir)"
+    return true
+end
+
+function use_local_cublasmg(cuda_dirs)
+    path = find_cuda_library("cublasMg", cuda_dirs)
+    #path === nothing && return false
+    path = "/home/kshyatt/software/cublasmg/cublasmg/lib/libcublasMg.so"
+    __libcublasmg[] = path
+    @debug "Using local CUBLASMG at $(path)"
+    return true
+end
+
+# CUDALIBMG
+
+const cudalibmg_artifacts = Dict(
+    v"10.2" => ()->artifact"CUDALIBMG+CUDA10.2",
+    v"10.1" => ()->artifact"CUDALIBMG+CUDA10.1",
+)
+
+function use_artifact_cudalibmg(release)
+    artifact_dir = try
+        cudalibmg_artifacts[release]()
+    catch ex
+        @debug "Could not use CUDALIBMG from artifacts" exception=(ex, catch_backtrace())
+        return false
+    end
+
+    __libcudalibmg[] = get_library(artifact_dir, "cudalibmg")
+    Libdl.dlopen(__libcudalibmg[])
+    @debug "Using CUDALIBMG from an artifact at $(artifact_dir)"
+    return true
+end
+
+function use_local_cudalibmg(cuda_dirs)
+    path = find_cuda_library("cudalibmg", String[], [v"1"])
+    #path === nothing && return false
+    path = "/home/kshyatt/software/cublasmg/cudalibmg/lib/libcudalibmg.so"
+
+    __libcudalibmg[] = path
+    @debug "Using local CUDALIBMG at $(path)"
+    return true
+end
+
 function __configure_dependencies__(show_reason::Bool)
     found = false
 
-    if parse(Bool, get(ENV, "JULIA_CUDA_USE_BINARYBUILDER", "true"))
+    if parse(Bool, get(ENV, "JULIA_CUDA_USE_BINARYBUILDER", "false"))
         found = use_artifact_cuda()
     end
 

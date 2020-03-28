@@ -8,3 +8,6 @@
 const CUBLASMG_MAJOR = 0
 const CUBLASMG_MINOR = 1
 const CUBLASMG_PATCH = 1
+
+const cublasMgContext = Cvoid
+const cublasMgHandle_t = Ptr{cublasMgContext}

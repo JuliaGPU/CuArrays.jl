@@ -44,16 +44,17 @@ end
 CuArrays.allowscalar(false)
 
 CuArrays.enable_timings()
-
+#=
 @testset "GPUArrays test suite" begin
   TestSuite.test(CuArray)
 end
-
+=#
 include("base.jl")
 include("memory.jl")
 
-include("blas.jl")
-include("rand.jl")
+#include("blas.jl")
+include("blasmg.jl")
+#=include("rand.jl")
 include("fft.jl")
 include("sparse.jl")
 include("solver.jl")
@@ -65,7 +66,7 @@ include("iterator.jl")
 include("forwarddiff.jl")
 include("nnlib.jl")
 include("statistics.jl")
-
+=#
 if haskey(ENV, "CI")
   GC.gc(true)
   CuArrays.memory_status()

@@ -5,7 +5,7 @@ using CUDAapi, CUDAdrv, CUDAnative
 using GPUArrays
 
 export CuArray, CuVector, CuMatrix, CuVecOrMat, CuIterator, cu
-export CUBLAS, CUSPARSE, CUSOLVER, CUFFT, CURAND, CUDNN, CUTENSOR
+export CUBLAS, CUSPARSE, CUSOLVER, CUFFT, CURAND, CUDNN, CUTENSOR, CUBLASMG, CUDALIBMG
 
 import LinearAlgebra
 
@@ -79,6 +79,8 @@ include("utils.jl")
 
 # vendor libraries
 include("blas/CUBLAS.jl")
+include("cudalibmg/CUDALIBMG.jl")
+include("blasmg/CUBLASMG.jl")
 include("sparse/CUSPARSE.jl")
 include("solver/CUSOLVER.jl")
 include("fft/CUFFT.jl")

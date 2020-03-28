@@ -3,33 +3,41 @@
 
 
 function cublasMgGemm(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
-    ccall((:cublasMgGemm, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{Ptr{Cvoid}}, Ptr{Csize_t}, Ptr{cudaStream_t}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
+    initialize_api()
+    @runtime_ccall((:cublasMgGemm, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}, Ptr{CUstream}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descC, C, lldc, computeType, workspace, lwork, streams)
 end
 
 function cublasMgGemmWorkspace(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
-    ccall((:cublasMgGemmWorkspace, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{Ptr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{Ptr{Cvoid}}, Ptr{Csize_t}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
+    initialize_api()
+    @runtime_ccall((:cublasMgGemmWorkspace, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descC, C, lldc, computeType, workspace, lwork)
 end
 
 function cublasMgCreate(handle)
-    ccall((:cublasMgCreate, libcublasmg()), cublasStatus_t, (Ptr{cublasMgHandle_t},), handle)
+    initialize_api()
+    @runtime_ccall((:cublasMgCreate, libcublasmg()), cublasStatus_t, (Ptr{cublasMgHandle_t},), handle)
 end
 
 function cublasMgDestroy(handle)
-    ccall((:cublasMgDestroy, libcublasmg()), cublasStatus_t, (cublasMgHandle_t,), handle)
+    initialize_api()
+    @runtime_ccall((:cublasMgDestroy, libcublasmg()), cublasStatus_t, (cublasMgHandle_t,), handle)
 end
 
 function cublasMgDeviceSelect(handle, nbDevices, deviceIds)
-    ccall((:cublasMgDeviceSelect, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, Cint, Ptr{Cint}), handle, nbDevices, deviceIds)
+    initialize_api()
+    @runtime_ccall((:cublasMgDeviceSelect, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, Cint, Ptr{Cint}), handle, nbDevices, deviceIds)
 end
 
 function cublasMgDeviceCount(handle, nbDevices)
-    ccall((:cublasMgDeviceCount, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, Ptr{Cint}), handle, nbDevices)
+    initialize_api()
+    @runtime_ccall((:cublasMgDeviceCount, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, Ptr{Cint}), handle, nbDevices)
 end
 
 function cublasMgGetVersion()
-    ccall((:cublasMgGetVersion, libcublasmg()), Csize_t, ())
+    initialize_api()
+    @runtime_ccall((:cublasMgGetVersion, libcublasmg()), Csize_t, ())
 end
 
 function cublasMgGetCudartVersion()
-    ccall((:cublasMgGetCudartVersion, libcublasmg()), Csize_t, ())
+    initialize_api()
+    @runtime_ccall((:cublasMgGetCudartVersion, libcublasmg()), Csize_t, ())
 end
