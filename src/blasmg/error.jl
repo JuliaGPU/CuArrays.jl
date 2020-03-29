@@ -6,6 +6,7 @@
 end
 
 function initialize_api()
+    synchronize()
     CUDAnative.prepare_cuda_call()
 end
 

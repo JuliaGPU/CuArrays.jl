@@ -48,11 +48,11 @@ CuArrays.enable_timings()
 @testset "GPUArrays test suite" begin
   TestSuite.test(CuArray)
 end
-=#
+
 include("base.jl")
 include("memory.jl")
 
-#include("blas.jl")
+include("blas.jl")=#
 include("blasmg.jl")
 #=include("rand.jl")
 include("fft.jl")

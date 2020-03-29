@@ -5,18 +5,23 @@ using LinearAlgebra
 using CuArrays.CUBLASMG
 using CUDAdrv
 
-voltas    = filter(dev->occursin("V100-PCIE-32GB", name(dev)), collect(CUDAdrv.devices()))[1:2]
+voltas    = filter(dev->occursin("V100-PCIE", name(dev)), collect(CUDAdrv.devices()))
 #voltas = [CUDAdrv.device()]
 @show voltas
+voltas = voltas[2:2]
 #CUBLASMG.cublasMgDeviceSelect(CUBLASMG.mg_handle(), 1, [0])
 #m = 2^1 * length(voltas)
 #n = 2^1 * length(voltas)
 #k = 2^1 * length(voltas)
-m = 8192
-n = 8192
-k = 8192
+#m = 8192
+#n = 8192
+#k = 8192
 
-@testset "element type $elty" for elty in [Float32]
+m = 2
+n = 2
+k = 2
+
+@testset "element type $elty" for elty in [Float64]
     alpha = convert(elty,1.1)
     beta = convert(elty,0.0)
     @testset "Level 3" begin
