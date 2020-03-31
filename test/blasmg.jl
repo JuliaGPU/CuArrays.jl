@@ -22,9 +22,9 @@ k = 8192
     alpha = convert(elty,1.1)
     beta  = convert(elty,0.0)
     @testset "Level 3" begin
-        A = rand(elty,m*k)
-        B = rand(elty,k*n)
-        C = rand(elty,m*n)
+        A = rand(elty,m,k)
+        B = rand(elty,k,n)
+        C = rand(elty,m,n)
         @testset "gemm!" begin
             d_C = copy(C)
             #d_C = CUBLASMG.mg_gemm!('N','N',alpha,A,B,beta,d_C, devs=voltas)

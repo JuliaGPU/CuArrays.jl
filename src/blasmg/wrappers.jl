@@ -119,10 +119,10 @@ end=#
 function mg_gemm!(transA::Char,
                   transB::Char,
                   alpha::Number,
-                  A::Vector,
-                  B::Vector,
+                  A::Matrix,
+                  B::Matrix,
                   beta::Number,
-                  C::Vector; devs=[0])
+                  C::Matrix; devs=[0])
     grid = CudaLibMGGrid(1, 1, [-1], CUDALIBMG_GRID_MAPPING_COL_MAJOR)
     #lda = Int64(max(1,stride(A,2)))
     #ldb = Int64(max(1,stride(B,2)))
