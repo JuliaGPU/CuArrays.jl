@@ -16,7 +16,7 @@ function cudaLibMgGetCudartVersion()
     @runtime_ccall((:cudaLibMgGetCudartVersion, libcudalibmg()), Csize_t, ())
 end
 
-function cudaLibMgCreateMatrixDesc(desc, numRows, numCols, rowBlockSize, colBlockSize,
+@checked function cudaLibMgCreateMatrixDesc(desc, numRows, numCols, rowBlockSize, colBlockSize,
                                    dataType, grid)
     initialize_api()
     @runtime_ccall((:cudaLibMgCreateMatrixDesc, libcudalibmg()), cudaLibMgStatus_t,
@@ -32,7 +32,7 @@ function cudaLibMgDestroyMatrixDesc(desc)
                    desc)
 end
 
-function cudaLibMgCreateDeviceGrid(grid, numRowDevices, numColDevices, deviceIds, mapping)
+@checked function cudaLibMgCreateDeviceGrid(grid, numRowDevices, numColDevices, deviceIds, mapping)
     initialize_api()
     @runtime_ccall((:cudaLibMgCreateDeviceGrid, libcudalibmg()), cudaLibMgStatus_t,
                    (Ptr{cudaLibMgGrid_t}, Int32, Int32, Ptr{Int32}, cudaLibMgGridMapping_t),
@@ -46,7 +46,7 @@ function cudaLibMgDestroyGrid(grid)
                    grid)
 end
 
-function cudaLibMgGetLocalMatrixDimensions(desc, numRows, numCols)
+@checked function cudaLibMgGetLocalMatrixDimensions(desc, numRows, numCols)
     initialize_api()
     @runtime_ccall((:cudaLibMgGetLocalMatrixDimensions, libcudalibmg()), cudaLibMgStatus_t,
                    (cudaLibMgMatrixDesc_t, Ptr{Int64}, Ptr{Int64}),
