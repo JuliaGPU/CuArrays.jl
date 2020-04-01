@@ -4,12 +4,12 @@
 
 function cublasMgGemm(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
     initialize_api()
-    @runtime_ccall((:cublasMgGemm, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}, Ptr{CUstream}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descC, C, lldc, computeType, workspace, lwork, streams)
+    @runtime_ccall((:cublasMgGemm, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}, Ptr{CUstream}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
 end
 
 function cublasMgGemmWorkspace(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
     initialize_api()
-    @runtime_ccall((:cublasMgGemmWorkspace, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descC, C, lldc, computeType, workspace, lwork)
+    @runtime_ccall((:cublasMgGemmWorkspace, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
 end
 
 function cublasMgCreate(handle)
