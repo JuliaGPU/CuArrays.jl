@@ -275,7 +275,7 @@ end
 function use_local_cublasmg(cuda_dirs)
     path = find_cuda_library("cublasMg", cuda_dirs)
     #path === nothing && return false
-    path = "/home/kshyatt/software/cublasmg/cublasmg/lib/libcublasMg.so"
+    path = joinpath(ENV["HOME"], "software/cublasmg/cublasmg/lib/libcublasMg.so")
     __libcublasmg[] = path
     @debug "Using local CUBLASMG at $(path)"
     return true
@@ -305,7 +305,7 @@ end
 function use_local_cudalibmg(cuda_dirs)
     path = find_cuda_library("cudalibmg", String[], [v"1"])
     #path === nothing && return false
-    path = "/home/kshyatt/software/cublasmg/cudalibmg/lib/libcudalibmg.so"
+    path = joinpath(ENV["HOME"], "software/cublasmg/cudalibmg/lib/libcudalibmg.so")
 
     __libcudalibmg[] = path
     @debug "Using local CUDALIBMG at $(path)"

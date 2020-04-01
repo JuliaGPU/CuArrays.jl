@@ -112,7 +112,7 @@ end
 function register(A)
     GC.@preserve A begin
         buf = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), sizeof(A), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
-        finalizer(A) do
+        finalizer(A) do A
             CUDAdrv.Mem.unregister(buf)
         end
     end
@@ -142,6 +142,7 @@ function mg_gemm!(transA::Char,
     B_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
     A_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
     lwork     = Vector{Csize_t}(undef, ndevs)
+    workspace = Vector{CUDAdrv.Mem.DeviceBuffer}(undef, ndevs)
     workspace_ref = Vector{CUDAdrv.CuPtr{Cvoid}}(undef, ndevs)
     streams   = Vector{CuStream}(undef, ndevs)
     GC.@preserve descA descB descC A_ref_arr B_ref_arr C_ref_arr workspace_ref lwork A B C streams begin
@@ -158,7 +159,8 @@ function mg_gemm!(transA::Char,
         # set up workspaces and streams
         for (di, dev) in enumerate(devs)
             device!(dev)
-            workspace_ref[di] = pointer(CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di]) )
+            workspace[di] = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di])
+            workspace_ref[di] = workspace[di].ptr 
             streams[di]   = CuDefaultStream()
             synchronize(streams[di])
             synchronize()
@@ -169,6 +171,7 @@ function mg_gemm!(transA::Char,
             device!(dev)
             synchronize(streams[di])
             synchronize()
+            CUDAdrv.Mem.free(workspace[di])
         end
         device!(devs[1])
     end
