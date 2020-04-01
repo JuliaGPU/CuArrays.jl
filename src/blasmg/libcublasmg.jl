@@ -2,12 +2,12 @@
 # Automatically generated using Clang.jl
 
 
-function cublasMgGemm(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
+@checked function cublasMgGemm(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
     initialize_api()
     @runtime_ccall((:cublasMgGemm, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}, Ptr{CUstream}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork, streams)
 end
 
-function cublasMgGemmWorkspace(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
+@checked function cublasMgGemmWorkspace(handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
     initialize_api()
     @runtime_ccall((:cublasMgGemmWorkspace, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, cublasOperation_t, cublasOperation_t, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, Ptr{Cvoid}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaLibMgMatrixDesc_t, Ptr{PtrOrCuPtr{Cvoid}}, Ptr{Int64}, cudaDataType_t, Ptr{CuPtr{Cvoid}}, Ptr{Csize_t}), handle, transA, transB, alpha, descA, A, llda, descB, B, lldb, beta, descC, C, lldc, descD, D, lldd, computeType, workspace, lwork)
 end
@@ -22,7 +22,7 @@ function cublasMgDestroy(handle)
     @runtime_ccall((:cublasMgDestroy, libcublasmg()), cublasStatus_t, (cublasMgHandle_t,), handle)
 end
 
-function cublasMgDeviceSelect(handle, nbDevices, deviceIds)
+@checked function cublasMgDeviceSelect(handle, nbDevices, deviceIds)
     initialize_api()
     @runtime_ccall((:cublasMgDeviceSelect, libcublasmg()), cublasStatus_t, (cublasMgHandle_t, Cint, Ptr{Cint}), handle, nbDevices, deviceIds)
 end

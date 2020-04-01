@@ -24,14 +24,14 @@ k = 8192
         #A = rand(elty,m*k)
         #B = rand(elty,k*n)
         #C = rand(elty,m*n)
-        C = zeros(Float32, m*n)
-        A = fill(Float32(2.0), m*k)
-        B = fill(Float32(3.0), k*n)
+        C = zeros(Float32, m, n)
+        A = fill(Float32(2.0), m, k)
+        B = fill(Float32(3.0), k, n)
         @testset "gemm!" begin
             d_C = copy(C)
             #d_C = CUBLASMG.mg_gemm!('N','N',alpha,A,B,beta,d_C, devs=voltas)
-            #d_C = CUBLASMG.mg_gemm!('N','N',alpha,A,B,beta,d_C, devs=pascals)
-            d_C = CUBLASMG.mg_gemm!('N','N',alpha,A,(m,k),B,(k,n),beta,d_C,(m,n))
+            d_C = CUBLASMG.mg_gemm!('T','N',alpha,A,B,beta,d_C, devs=pascals)
+            #d_C = CUBLASMG.mg_gemm!('T','N',alpha,A,(m,k),B,(k,n),beta,d_C,(m,n))
             # compare
             #h_C = (alpha*reshape(A, m, k))*reshape(B, k, n) + beta*reshape(C, m, n)
             #@test reshape(d_C, m, n) ≈ h_C
