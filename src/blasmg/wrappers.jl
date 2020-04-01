@@ -66,6 +66,7 @@ function mg_gemm_gpu!(transA::Char,
                   beta::Number,
                   C::Matrix; devs=[0], dev_rows=1, dev_cols=1)
     device!(devs[1])
+    GC.enable(false)
     grid = Ref{cudaLibMgGrid_t}(0)
     cudaLibMgCreateDeviceGrid(grid, dev_rows, dev_cols, devs, CUDALIBMG.CUDALIBMG_GRID_MAPPING_COL_MAJOR)
     cutransA = cublasop(transA)
@@ -90,7 +91,6 @@ function mg_gemm_gpu!(transA::Char,
     # set up workspaces and streams
     for (di, dev) in enumerate(devs)
         device!(dev)
-        @show lwork[di]
         buf = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di]) 
         workspace[di] = buf.ptr
         synchronize()
@@ -105,6 +105,7 @@ function mg_gemm_gpu!(transA::Char,
         synchronize()
     end
     C = returnBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, div(size(C, 1), dev_rows), div(size(C, 2), dev_cols), descC, dC, C)
+    GC.enable(true)
     return C
 end
 
@@ -157,7 +158,6 @@ function mg_gemm!(transA::Char,
         # set up workspaces and streams
         for (di, dev) in enumerate(devs)
             device!(dev)
-            @show lwork[di]
             workspace_ref[di] = pointer(CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di]) )
             streams[di]   = CuDefaultStream()
             synchronize(streams[di])

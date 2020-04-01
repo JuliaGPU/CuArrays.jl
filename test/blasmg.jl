@@ -4,16 +4,19 @@ using LinearAlgebra
 using CuArrays.CUBLASMG
 using CUDAdrv
 
-#voltas    = filter(dev->occursin("V100-PCIE-32GB", name(dev)), collect(CUDAdrv.devices()))
-#pascals    = filter(dev->occursin("P100-PCIE", name(dev)), collect(CUDAdrv.devices()))
+voltas    = filter(dev->occursin("V100-PCIE-32GB", name(dev)), collect(CUDAdrv.devices()))
+pascals    = filter(dev->occursin("P100-PCIE", name(dev)), collect(CUDAdrv.devices()))
 #voltas = voltas[1:1]
 #pascals = pascals[1:1]
-devs = [0, 1]#voltas
-#CUBLASMG.cublasMgDeviceSelect(CUBLASMG.mg_handle(), length(voltas), voltas)
+devs = voltas[1:4]
+CUBLASMG.cublasMgDeviceSelect(CUBLASMG.mg_handle(), length(devs), devs)
 #CUBLASMG.cublasMgDeviceSelect(CUBLASMG.mg_handle(), length(pascals), pascals)
-m = 8192
+#=m = 8192
 n = 8192
-k = 8192
+k = 8192=#
+m = 2
+n = 2
+k = 2
 @testset "element type $elty" for elty in [Float32]
     alpha = convert(elty,1.1)
     beta  = convert(elty,0.0)
@@ -23,7 +26,8 @@ k = 8192
         B = fill(Float32(3.0), k, n)
         @testset "gemm!" begin
             d_C = copy(C)
-            d_C = CUBLASMG.mg_gemm_gpu!('T','N',alpha,A,B,beta,d_C, devs=devs, dev_rows=2)
+            d_C = CUBLASMG.mg_gemm_gpu!('T','N',alpha,A,B,beta,d_C, devs=devs, dev_rows=2, dev_cols=2)
+            #d_C = CUBLASMG.mg_gemm!('T','N',alpha,A,B,beta,d_C)
             # compare
             #h_C = (alpha*reshape(A, m, k))*reshape(B, k, n) + beta*reshape(C, m, n)
             #@test reshape(d_C, m, n) ≈ h_C
