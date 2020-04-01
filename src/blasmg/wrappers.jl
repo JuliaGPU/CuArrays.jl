@@ -4,8 +4,18 @@ function cublasMgCreate()
     return handle[]
 end
 
+function register(A)
+    GC.@preserve A begin
+        buf = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), sizeof(A), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
+        finalizer(A) do
+            CUDAdrv.Mem.unregister(buf)
+        end
+    end
+    return A
+end
+
 function allocateBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIdsGrid, streams, row_block_size, col_block_size, desc, D, Dsize)
-    buffers  = Vector{CuVector{eltype(D)}}(undef, num_devices)
+    buffers  = Vector{CuPtr{Cvoid}}(undef, num_devices)
     numRows  = Vector{Int64}(undef, num_devices)
     numCols  = Vector{Int64}(undef, num_devices)
     typesize = sizeof(eltype(D))
@@ -27,11 +37,9 @@ function allocateBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceI
         cpu_buf = vec(D[Dinds[row_inds, col_inds]])
         println()
         println("IN ALLOCATOR:")
-        @show di, dev, dev_row, dev_col, numRows[di], numCols[di], sizeof(cpu_buf)
         println()
         flush(stdout)
-        buffers[di] = CuArray(cpu_buf)
-        #synchronize(streams[di])
+        buffers[di] = pointer(CuArray(cpu_buf))
         synchronize()
     end
     device!(deviceIdsGrid[1])
@@ -39,7 +47,6 @@ function allocateBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceI
 end
 
 function returnBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIdsGrid, streams, row_block_size, col_block_size, desc, dDs, D, Dsize)
-    buffers  = Vector{CuVector{eltype(D)}}(undef, num_devices)
     numRows  = Vector{Int64}(undef, num_devices)
     numCols  = Vector{Int64}(undef, num_devices)
     typesize = sizeof(eltype(D))
@@ -95,7 +102,7 @@ end
     dB, ldbs = allocateBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, div(dimsB[1], dev_rows), div(dimsB[2], dev_cols), descB, B, dimsB)
     dC, ldcs = allocateBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, div(dimsC[1], dev_rows), div(dimsC[2], dev_cols), descC, C, dimsC)
     lwork     = Vector{Int}(undef, ndevs)
-    workspace = Vector{CuVector{eltype(C)}}(undef, ndevs)
+    workspace = Vector{CuPtr{Cvoid}}(undef, ndevs)
     device!(devs[1])
     alpha_arr = Ref(alpha)
     beta_arr  = Ref(beta)
@@ -103,11 +110,8 @@ end
     # set up workspaces and streams
     for (di, dev) in enumerate(devs)
         device!(dev)
-        synchronize()
-        println("IN WORKSPACE")
-        @show dev, device(), lwork[di]
-        flush(stdout)
-        workspace[di] = CuVector{eltype(C)}(undef, div(convert(Int, lwork[di]), sizeof(eltype(C))))
+        buf = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di]) 
+        workspace[di] = buf.ptr
         synchronize()
     end
     device!(devs[1])
@@ -159,9 +163,6 @@ function mg_gemm!(transA::Char,
     ldc = max(1, stride(C, 2))
     cutransA = cublasop(transA)
     cutransB = cublasop(transB)
-    #descA    = CudaLibMGDescriptor(A, grid, rowblocks=dimsA[1], colblocks=dimsA[2])
-    #descB    = CudaLibMGDescriptor(B, grid, rowblocks=dimsB[1], colblocks=dimsB[2])
-    #descC    = CudaLibMGDescriptor(C, grid, rowblocks=dimsC[1], colblocks=dimsC[2])
     descA    = CudaLibMGDescriptor(A, grid)
     descB    = CudaLibMGDescriptor(B, grid)
     descC    = CudaLibMGDescriptor(C, grid)
@@ -169,26 +170,23 @@ function mg_gemm!(transA::Char,
     C_arr = Vector{CUDAdrv.Mem.HostBuffer}(undef, ndevs)
     B_arr = Vector{CUDAdrv.Mem.HostBuffer}(undef, ndevs)
     A_arr = Vector{CUDAdrv.Mem.HostBuffer}(undef, ndevs)
-    C_wrap_arr = Vector{Array}(undef, ndevs)
-    B_wrap_arr = Vector{Array}(undef, ndevs)
-    A_wrap_arr = Vector{Array}(undef, ndevs)
-    C_ref_arr = Vector{Ptr}(undef, ndevs)
-    B_ref_arr = Vector{Ptr}(undef, ndevs)
-    A_ref_arr = Vector{Ptr}(undef, ndevs)
+    C_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
+    B_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
+    A_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
     lwork     = Vector{Csize_t}(undef, ndevs)
-    workspace = Vector{CuVector}(undef, ndevs)
+    workspace = Vector{CuPtr{Cvoid}}(undef, ndevs)
     streams   = Vector{CuStream}(undef, ndevs)
-    GC.@preserve descA descB descC A_wrap_arr B_wrap_arr C_wrap_arr A_ref_arr A_arr B_ref_arr B_arr C_ref_arr C_arr workspace lwork A B C streams begin
+    GC.@preserve descA descB descC A_ref_arr A_arr B_ref_arr B_arr C_ref_arr C_arr workspace lwork A B C streams begin
+        #A = register(A)
+        #B = register(B)
+        #C = register(C)
         for (di, dev) in enumerate(devs)
-            A_arr[di] = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), length(A)*sizeof(eltype(A)), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
-            B_arr[di] = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(B), length(B)*sizeof(eltype(B)), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
-            C_arr[di] = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(C), length(C)*sizeof(eltype(C)), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
-            A_wrap_arr[di] = unsafe_wrap(Array, convert(Ptr{eltype(A)}, A_arr[di]), size(A), own=true)
-            B_wrap_arr[di] = unsafe_wrap(Array, convert(Ptr{eltype(B)}, B_arr[di]), size(B), own=true)
-            C_wrap_arr[di] = unsafe_wrap(Array, convert(Ptr{eltype(C)}, C_arr[di]), size(C), own=true)
-            A_ref_arr[di] = pointer(A_wrap_arr[di])
-            B_ref_arr[di] = pointer(B_wrap_arr[di])
-            C_ref_arr[di] = pointer(C_wrap_arr[di])
+            A_arr[di] = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), sizeof(A), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
+            B_arr[di] = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(B), sizeof(B), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
+            C_arr[di] = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(C), sizeof(C), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
+            A_ref_arr[di] = pointer(A)
+            B_ref_arr[di] = pointer(B)
+            C_ref_arr[di] = pointer(C)
             synchronize()
         end
         device!(devs[1])
@@ -200,34 +198,26 @@ function mg_gemm!(transA::Char,
         # set up workspaces and streams
         for (di, dev) in enumerate(devs)
             device!(dev)
-            workspace[di] = CuVector{eltype(C)}(undef, div(Int(lwork[di]), sizeof(eltype(C))))
+            CuArrays.memory_status()
+            @show lwork[di]
+            buf = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di]) 
+            workspace[di] = buf.ptr
             streams[di]   = CuDefaultStream()
             synchronize(streams[di])
             synchronize()
         end
         device!(devs[1])
-        @show lwork
-        @show ldaa
-        @show ldbb
-        @show ldcc
-        @show cutransA
-        @show cutransB
-        flush(stdout)
         cublasMgGemm(mg_handle(), cutransA, cutransB, [alpha], descA, A_ref_arr, ldaa, descB, B_ref_arr, ldbb, [beta], descC, C_ref_arr, ldcc, descC, C_ref_arr, ldcc, cudaDataType(eltype(C)), workspace, lwork, streams)
         for (di, dev) in enumerate(devs)
             device!(dev)
             synchronize(streams[di])
             synchronize()
-            @show C[1]
             CUDAdrv.Mem.unregister(A_arr[di])
             CUDAdrv.Mem.unregister(B_arr[di])
             CUDAdrv.Mem.unregister(C_arr[di])
         end
-        println("Done stream sync")
-        flush(stdout)
         device!(devs[1])
     end
-    @show C[1]
     GC.enable(true)
     return C
 end
