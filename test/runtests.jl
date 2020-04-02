@@ -54,6 +54,8 @@ include("memory.jl")
 
 include("blas.jl")=#
 include("blasmg.jl")
+# seemingly can only run one of these... need to reset the handle somehow
+#include("blasmg_multi.jl")
 #=include("rand.jl")
 include("fft.jl")
 include("sparse.jl")
