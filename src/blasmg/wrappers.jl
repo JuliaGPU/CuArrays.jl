@@ -100,7 +100,6 @@ function mg_gemm_gpu!(transA::Char,
     # set up workspaces and streams
     for (di, dev) in enumerate(devs)
         device!(dev)
-        @show di, lwork[di]
         workspace[di] = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di]) 
         workspace_ref[di] = workspace[di].ptr
         synchronize()
