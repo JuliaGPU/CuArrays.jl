@@ -146,11 +146,14 @@ function mg_gemm!(transA::Char,
     workspace = Vector{CUDAdrv.Mem.DeviceBuffer}(undef, ndevs)
     workspace_ref = Vector{CUDAdrv.CuPtr{Cvoid}}(undef, ndevs)
     streams   = Vector{CuStream}(undef, ndevs)
-    GC.@preserve descA descB descC A_ref_arr B_ref_arr C_ref_arr workspace_ref lwork A B C streams begin
+    Areg = register(A)
+    Breg = register(B)
+    Creg = register(C)
+    GC.@preserve descA descB descC A_ref_arr B_ref_arr C_ref_arr Areg Breg Creg workspace_ref lwork A B C streams begin
         for (di, dev) in enumerate(devs)
-            A_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(register(A)))
-            B_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(register(B)))
-            C_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(register(C)))
+            A_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(Areg))
+            B_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(Breg))
+            C_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(Creg))
         end
         device!(devs[1])
         ldcc      = [Int64(ldc)]
