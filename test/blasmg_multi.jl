@@ -1,24 +1,19 @@
-using LinearAlgebra
-@testset "CUBLASMB multi" begin
+using LinearAlgebra, Test
+@testset "CUBLASMG multi" begin
 
 using CuArrays.CUBLASMG
 using CUDAdrv
-#cublasMgDestroy(CUBLASMG.mg_handle())
 voltas    = filter(dev->occursin("V100", name(dev)), collect(CUDAdrv.devices()))
 pascals   = filter(dev->occursin("P100-PCIE", name(dev)), collect(CUDAdrv.devices()))
 m = 8192
 n = div(8192, 2)
 k = 8192*2
+devs = voltas[1:4]
+CUBLASMG.cublasMgDeviceSelect(CUBLASMG.mg_handle(), length(devs), devs)
 @testset "element type $elty" for elty in [Float32, Float64]
     alpha = convert(elty,1.1)
     beta  = convert(elty,0.0)
     @testset "mg_gemm_gpu!" begin
-        devs = voltas[1:4]
-        CUBLASMG.cublasMgDeviceSelect(CUBLASMG.mg_handle(), length(devs), devs)
-        for (di, dev) in enumerate(devs)
-            synchronize()
-        end
-
         C = zeros(elty, m, n)
         A = rand(elty, m, k)
         B = rand(elty, k, n)

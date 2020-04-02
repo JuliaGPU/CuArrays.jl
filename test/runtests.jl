@@ -48,15 +48,12 @@ CuArrays.enable_timings()
 @testset "GPUArrays test suite" begin
   TestSuite.test(CuArray)
 end
-
 include("base.jl")
 include("memory.jl")
-
-include("blas.jl")=#
-include("blasmg.jl")
-# seemingly can only run one of these... need to reset the handle somehow
+include("blas.jl")
+#include("blasmg.jl")
 #include("blasmg_multi.jl")
-#=include("rand.jl")
+include("rand.jl")
 include("fft.jl")
 include("sparse.jl")
 include("solver.jl")
@@ -69,6 +66,14 @@ include("forwarddiff.jl")
 include("nnlib.jl")
 include("statistics.jl")
 =#
+let p, cmd = `$(Base.julia_cmd()) blasmg.jl`
+    p = run(pipeline(setenv(cmd, "LD_PRELOAD" => ENV["CUDA_DIR"]*"lib64/libcudart.so"), stdout = stdout, stderr = stderr), wait = false)
+    #include("blasmg.jl")
+    if !success(p)
+        error("BLASMG test failed")
+    end
+end
+
 if haskey(ENV, "CI")
   GC.gc(true)
   CuArrays.memory_status()
