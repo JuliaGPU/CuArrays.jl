@@ -1,5 +1,4 @@
 using LinearAlgebra, Test
-println("hello")
 @testset "CUBLASMG" begin
 
 using CuArrays.CUBLASMG

@@ -51,10 +51,9 @@ end
 include("base.jl")
 include("memory.jl")
 include("blas.jl")
-#include("blasmg.jl")
-#include("blasmg_multi.jl")
 include("rand.jl")
 include("fft.jl")
+=#
 include("sparse.jl")
 include("solver.jl")
 include("sparse_solver.jl")
@@ -65,12 +64,17 @@ include("iterator.jl")
 include("forwarddiff.jl")
 include("nnlib.jl")
 include("statistics.jl")
-=#
+#let p, cmd = `LD_PRELOAD=/usr/local/cuda/lib64/libcudart.so $(Base.julia_cmd()) blasmg.jl`
 let p, cmd = `$(Base.julia_cmd()) blasmg.jl`
-    p = run(pipeline(setenv(cmd, "LD_PRELOAD" => ENV["CUDA_DIR"]*"lib64/libcudart.so"), stdout = stdout, stderr = stderr), wait = false)
-    #include("blasmg.jl")
+    p = run(pipeline(cmd, stdout = stdout, stderr = stderr), wait = false)
     if !success(p)
         error("BLASMG test failed")
+    end
+end
+let p, cmd = `$(Base.julia_cmd()) blasmg_multi.jl`
+    p = run(pipeline(cmd, stdout = stdout, stderr = stderr), wait = false)
+    if !success(p)
+        error("BLASMG multi test failed")
     end
 end
 
