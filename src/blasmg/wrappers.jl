@@ -48,7 +48,8 @@ function returnBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIds
         dev_col = div(di - 1, n_row_devs) + 1
         row_inds = ((dev_row-1)*row_block_size+1):min(dev_row*row_block_size, size(D, 1))
         col_inds = ((dev_col-1)*col_block_size+1):min(dev_col*col_block_size, size(D, 1))
-        D[row_inds, col_inds] = collect(dDs[di])
+        wrap_D = unsafe_wrap(CuArray, convert(CuPtr{eltype(D)}, dDs[di]), (length(row_inds), length(col_inds))) 
+        D[row_inds, col_inds] = collect(wrap_D)
     end
     for (di, dev) in enumerate(deviceIdsGrid)
         device!(dev)
