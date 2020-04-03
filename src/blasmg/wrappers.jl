@@ -4,35 +4,73 @@ function cublasMgCreate()
     return handle[]
 end
 
-function allocateBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIdsGrid, streams, row_block_size, col_block_size, desc, D)
-    buffers  = Vector{CuPtr{Cvoid}}(undef, num_devices)
-    numRows  = Vector{Int64}(undef, num_devices)
-    numCols  = Vector{Int64}(undef, num_devices)
-    typesize = sizeof(eltype(D))
-    cudaLibMgGetLocalMatrixDimensions(desc, numRows, numCols)
-    llds = Vector{Int64}(undef, num_devices)
-    sub_Ds = Vector{Vector}(undef, num_devices)
+function allocateBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIdsGrid, streams, descs, mats)
+    A, B, C  = mats
+    dA, dB, dC  = descs
+    a_row_block_size = div(size(A, 1), n_row_devs)
+    a_col_block_size = div(size(A, 2), n_col_devs)
+    b_row_block_size = div(size(B, 1), n_row_devs)
+    b_col_block_size = div(size(B, 2), n_col_devs)
+    c_row_block_size = div(size(C, 1), n_row_devs)
+    c_col_block_size = div(size(C, 2), n_col_devs)
+    a_buffers  = Vector{CuPtr{Cvoid}}(undef, num_devices)
+    b_buffers  = Vector{CuPtr{Cvoid}}(undef, num_devices)
+    c_buffers  = Vector{CuPtr{Cvoid}}(undef, num_devices)
+    a_numRows  = Vector{Int64}(undef, num_devices)
+    a_numCols  = Vector{Int64}(undef, num_devices)
+    b_numRows  = Vector{Int64}(undef, num_devices)
+    b_numCols  = Vector{Int64}(undef, num_devices)
+    c_numRows  = Vector{Int64}(undef, num_devices)
+    c_numCols  = Vector{Int64}(undef, num_devices)
+
+    typesize = sizeof(eltype(C))
+    cudaLibMgGetLocalMatrixDimensions(dA, a_numRows, a_numCols)
+    cudaLibMgGetLocalMatrixDimensions(dB, b_numRows, b_numCols)
+    cudaLibMgGetLocalMatrixDimensions(dC, c_numRows, c_numCols)
+    ldas = Vector{Int64}(undef, num_devices)
+    ldbs = Vector{Int64}(undef, num_devices)
+    ldcs = Vector{Int64}(undef, num_devices)
+    a_cpu_bufs = Vector{Matrix{eltype(A)}}(undef, num_devices)
+    b_cpu_bufs = Vector{Matrix{eltype(B)}}(undef, num_devices)
+    c_cpu_bufs = Vector{Matrix{eltype(C)}}(undef, num_devices)
     for (di, dev) in enumerate(deviceIdsGrid)
-        device!(dev)
-        llds[di]    = numRows[di]
+        ldas[di]    = a_numRows[di]
+        ldbs[di]    = b_numRows[di]
+        ldcs[di]    = c_numRows[di]
         dev_row     = mod(di - 1, n_row_devs) + 1
         dev_col     = div(di - 1, n_row_devs) + 1
-        row_inds    = ((dev_row-1)*row_block_size+1):min(dev_row*row_block_size, size(D, 1))
-        col_inds    = ((dev_col-1)*col_block_size+1):min(dev_col*col_block_size, size(D, 2))
+
+        a_row_inds    = ((dev_row-1)*a_row_block_size+1):min(dev_row*a_row_block_size, size(A, 1))
+        a_col_inds    = ((dev_col-1)*a_col_block_size+1):min(dev_col*a_col_block_size, size(A, 2))
+        a_cpu_bufs[di] = Array(A[a_row_inds, a_col_inds])
+        b_row_inds    = ((dev_row-1)*b_row_block_size+1):min(dev_row*b_row_block_size, size(B, 1))
+        b_col_inds    = ((dev_col-1)*b_col_block_size+1):min(dev_col*b_col_block_size, size(B, 2))
+        b_cpu_bufs[di] = Array(B[b_row_inds, b_col_inds])
+        c_row_inds    = ((dev_row-1)*c_row_block_size+1):min(dev_row*c_row_block_size, size(C, 1))
+        c_col_inds    = ((dev_col-1)*c_col_block_size+1):min(dev_col*c_col_block_size, size(C, 2))
+        c_cpu_bufs[di] = Array(C[c_row_inds, c_col_inds])
+    end
+    for (di, dev) in enumerate(deviceIdsGrid)
+        device!(dev)
         if !isassigned(streams, di)
             streams[di] = CuStream()
         end
-        cpu_buf = Array(D[row_inds, col_inds])
-        gpu_buf = CuMatrix{eltype(D)}(undef, size(D))
-        unsafe_copyto!(pointer(gpu_buf), pointer(cpu_buf), length(cpu_buf), stream = streams[di], async = true)
-        buffers[di] = convert(CuPtr{Cvoid}, pointer(gpu_buf))
+        a_gpu_buf = CuMatrix{eltype(A)}(undef, size(A))
+        b_gpu_buf = CuMatrix{eltype(B)}(undef, size(B))
+        c_gpu_buf = CuMatrix{eltype(C)}(undef, size(C))
+        unsafe_copyto!(pointer(a_gpu_buf), pointer(a_cpu_bufs[di]), length(a_cpu_bufs[di]), stream = streams[di], async = true)
+        unsafe_copyto!(pointer(b_gpu_buf), pointer(b_cpu_bufs[di]), length(b_cpu_bufs[di]), stream = streams[di], async = true)
+        unsafe_copyto!(pointer(c_gpu_buf), pointer(c_cpu_bufs[di]), length(c_cpu_bufs[di]), stream = streams[di], async = true)
+        a_buffers[di] = convert(CuPtr{Cvoid}, pointer(a_gpu_buf))
+        b_buffers[di] = convert(CuPtr{Cvoid}, pointer(b_gpu_buf))
+        c_buffers[di] = convert(CuPtr{Cvoid}, pointer(c_gpu_buf))
     end
     for (di, dev) in enumerate(deviceIdsGrid)
         device!(dev)
         synchronize(streams[di])
     end
     device!(deviceIdsGrid[1])
-    return buffers, llds
+    return (a_buffers, b_buffers, c_buffers), (ldas, ldbs, ldcs)
 end
 
 function returnBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIdsGrid, streams, row_block_size, col_block_size, desc, dDs, D)
@@ -92,9 +130,9 @@ function mg_gemm_gpu!(transA::Char,
     descC    = CudaLibMGDescriptor(C, grid[], rowblocks=div(size(C, 1), dev_rows), colblocks=div(size(C, 2), dev_cols))
     ndevs    = length(devs)
     streams  = Vector{CuStream}(undef, ndevs)
-    dA, ldas = allocateBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, div(ma, dev_rows), div(na, dev_cols), descA, A)
-    dB, ldbs = allocateBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, div(mb, dev_rows), div(nb, dev_cols), descB, B)
-    dC, ldcs = allocateBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, div(size(C, 1), dev_rows), div(size(C, 2), dev_cols), descC, C)
+    bufs, lds = allocateBuffers(grid, dev_rows, dev_cols, ndevs, devs, streams, (descA, descB, descC), (A, B, C))
+    dA, dB, dC = bufs
+    ldas, ldbs, ldcs = lds
     lwork     = fill(Csize_t(0x0000000100000000), ndevs)#Vector{Csize_t}(undef, ndevs)
     workspace = Vector{CUDAdrv.Mem.DeviceBuffer}(undef, ndevs)
     workspace_ref = Vector{CuPtr{Cvoid}}(undef, ndevs)
