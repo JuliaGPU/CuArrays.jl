@@ -22,9 +22,14 @@ function allocateBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceI
         if !isassigned(streams, di)
             streams[di] = CuStream()
         end
-        cpu_buf = D[row_inds, col_inds]
-        buffers[di] = pointer(CuArray(cpu_buf))
-        synchronize()
+        cpu_buf = Array(D[row_inds, col_inds])
+        gpu_buf = CuMatrix{eltype(D)}(undef, size(D))
+        unsafe_copyto!(pointer(gpu_buf), pointer(cpu_buf), length(cpu_buf), stream = streams[di], async = true)
+        buffers[di] = convert(CuPtr{Cvoid}, pointer(gpu_buf))
+    end
+    for (di, dev) in enumerate(deviceIdsGrid)
+        device!(dev)
+        synchronize(streams[di])
     end
     device!(deviceIdsGrid[1])
     return buffers, llds
@@ -36,24 +41,24 @@ function returnBuffers(grid, n_row_devs, n_col_devs, num_devices::Int, deviceIds
     typesize = sizeof(eltype(D))
     cudaLibMgGetLocalMatrixDimensions(desc, numRows, numCols)
     current_dev = device()
-    sub_Ds = Vector{Vector}(undef, num_devices)
-    for (di, dev) in enumerate(deviceIdsGrid)
-        device!(dev)
-        synchronize(streams[di])
-        synchronize()
-    end
+    cpu_bufs = Vector{Matrix{eltype(D)}}(undef, num_devices)
     for (di, dev) in enumerate(deviceIdsGrid)
         device!(dev)
         dev_row = mod(di - 1, n_row_devs) + 1
         dev_col = div(di - 1, n_row_devs) + 1
         row_inds = ((dev_row-1)*row_block_size+1):min(dev_row*row_block_size, size(D, 1))
         col_inds = ((dev_col-1)*col_block_size+1):min(dev_col*col_block_size, size(D, 1))
-        wrap_D = unsafe_wrap(CuArray, convert(CuPtr{eltype(D)}, dDs[di]), (length(row_inds), length(col_inds))) 
-        D[row_inds, col_inds] = collect(wrap_D)
+        cpu_bufs[di] = Matrix{eltype(D)}(undef, length(row_inds), length(col_inds))
+        unsafe_copyto!(pointer(cpu_bufs[di]), convert(CuPtr{eltype(D)}, dDs[di]), length(cpu_bufs[di]), stream = streams[di], async = true)
     end
     for (di, dev) in enumerate(deviceIdsGrid)
         device!(dev)
         synchronize(streams[di])
+        dev_row = mod(di - 1, n_row_devs) + 1
+        dev_col = div(di - 1, n_row_devs) + 1
+        row_inds = ((dev_row-1)*row_block_size+1):min(dev_row*row_block_size, size(D, 1))
+        col_inds = ((dev_col-1)*col_block_size+1):min(dev_col*col_block_size, size(D, 1))
+        D[row_inds, col_inds] = cpu_bufs[di]
     end
     device!(deviceIdsGrid[1])
     return D
@@ -118,15 +123,13 @@ function mg_gemm_gpu!(transA::Char,
     return C
 end
 
-function register(A)
-    GC.@preserve A begin
-        buf = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), sizeof(A), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
-        finalizer(A) do A
-            CUDAdrv.Mem.unregister(buf)
-        end
+#=ffunction register(A)
+    buf = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), sizeof(A), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
+    inalizer(A) do buf
+        CUDAdrv.Mem.unregister(buf)
     end
-    return A
-end
+    return A, buf
+end=#
 
 function mg_gemm!(transA::Char,
                   transB::Char,
@@ -135,7 +138,6 @@ function mg_gemm!(transA::Char,
                   B::Matrix,
                   beta::Number,
                   C::Matrix; devs=[0])
-    GC.enable(false)
     device!(devs[1])
     grid = CudaLibMGGrid(Int32(1), Int32(1), [Int32(-1)], CUDALIBMG_GRID_MAPPING_ROW_MAJOR)
     lda = max(1, stride(A, 2)) 
@@ -154,14 +156,14 @@ function mg_gemm!(transA::Char,
     workspace = Vector{CUDAdrv.Mem.DeviceBuffer}(undef, ndevs)
     workspace_ref = Vector{CUDAdrv.CuPtr{Cvoid}}(undef, ndevs)
     streams       = Vector{CuStream}(undef, ndevs)
-    Areg = register(A)
-    Breg = register(B)
-    Creg = register(C)
-    GC.@preserve descA descB descC A_ref_arr B_ref_arr C_ref_arr Areg Breg Creg workspace_ref lwork A B C streams begin
+    CUDAdrv.Mem.pin(A)
+    CUDAdrv.Mem.pin(B)
+    CUDAdrv.Mem.pin(C)
+    #GC.@preserve descA descB descC Abuf Bbuf Cbuf A_ref_arr B_ref_arr C_ref_arr Areg Breg Creg workspace_ref lwork A B C streams begin
         for (di, dev) in enumerate(devs)
-            A_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(Areg))
-            B_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(Breg))
-            C_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(Creg))
+            A_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(A))
+            B_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(B))
+            C_ref_arr[di] = Base.unsafe_convert(Ptr{Cvoid}, pointer(C))
         end
         device!(devs[1])
         ldcc      = [Int64(ldc)]
@@ -186,7 +188,9 @@ function mg_gemm!(transA::Char,
             CUDAdrv.Mem.free(workspace[di])
         end
         device!(devs[1])
-    end
-    GC.enable(true)
+        #CUDAdrv.Mem.unregister(Abuf)
+        #CUDAdrv.Mem.unregister(Bbuf)
+        #CUDAdrv.Mem.unregister(Cbuf)
+    #end
     return C
 end
