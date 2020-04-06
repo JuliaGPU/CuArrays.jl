@@ -161,7 +161,7 @@ function mg_gemm_gpu!(transA::Char,
     return C
 end
 
-#=ffunction register(A)
+#=function register(A)
     buf = CUDAdrv.Mem.register(CUDAdrv.Mem.HostBuffer, pointer(A), sizeof(A), CUDAdrv.Mem.HOSTREGISTER_DEVICEMAP | CUDAdrv.Mem.HOSTREGISTER_PORTABLE)
     inalizer(A) do buf
         CUDAdrv.Mem.unregister(buf)
@@ -175,7 +175,7 @@ function mg_gemm!(transA::Char,
                   A::Matrix,
                   B::Matrix,
                   beta::Number,
-                  C::Matrix; devs=[0])
+                  C::Matrix; devs=[0], dev_rows=1, dev_cols=1)
     device!(devs[1])
     grid = CudaLibMGGrid(Int32(1), Int32(1), [Int32(-1)], CUDALIBMG_GRID_MAPPING_ROW_MAJOR)
     lda = max(1, stride(A, 2)) 
@@ -183,9 +183,9 @@ function mg_gemm!(transA::Char,
     ldc = max(1, stride(C, 2))
     cutransA = cublasop(transA)
     cutransB = cublasop(transB)
-    descA    = CudaLibMGDescriptor(A, grid)
-    descB    = CudaLibMGDescriptor(B, grid)
-    descC    = CudaLibMGDescriptor(C, grid)
+    descA    = CudaLibMGDescriptor(A, grid, rowblocks=div(size(A, 1), dev_rows), colblocks=div(size(A, 2), dev_cols))
+    descB    = CudaLibMGDescriptor(B, grid, rowblocks=div(size(B, 1), dev_rows), colblocks=div(size(B, 2), dev_cols))
+    descC    = CudaLibMGDescriptor(C, grid, rowblocks=div(size(C, 1), dev_rows), colblocks=div(size(C, 2), dev_cols))
     ndevs    = length(devs)
     C_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
     B_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
