@@ -4,7 +4,12 @@ mutable struct CudaLibMGDescriptor
 
     function CudaLibMGDescriptor(a, grid; rowblocks = size(a, 1), colblocks = size(a, 2), elta = eltype(a) )
         desc = Ref{cudaLibMgMatrixDesc_t}()
-        cudaLibMgCreateMatrixDesc(desc, size(a, 1), size(a, 2), rowblocks, colblocks, cudaDataType(elta), grid)
+        try
+            cudaLibMgCreateMatrixDesc(desc, size(a, 1), size(a, 2), rowblocks, colblocks, cudaDataType(elta), grid)
+        catch e
+            @warn "size(A) = $(size(A)), rowblocks = $rowblocks, colblocks = $colblocks"
+            throw(e)
+        end
         return new(desc[])
     end
 end

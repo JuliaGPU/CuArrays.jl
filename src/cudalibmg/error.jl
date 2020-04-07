@@ -7,9 +7,7 @@ end
 Base.convert(::Type{cudaLibMgStatus_t}, err::CUDALIBMGError) = err.code
 
 Base.showerror(io::IO, err::CUDALIBMGError) =
-    print(io, "CUDALIBMGError: ", description(err), " (code $(reinterpret(Int32, err.code)), $(name(err)))")
-
-name(err::CUDALIBMGError) = unsafe_string(cudaLibMgGetErrorString(err))
+    print(io, "CUDALIBMGError: ", description(err), " (code $(reinterpret(Int32, err.code))")
 
 ## COV_EXCL_START
 function description(err::CUDALIBMGError)
