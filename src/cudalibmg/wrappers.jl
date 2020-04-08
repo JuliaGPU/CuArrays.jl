@@ -7,7 +7,8 @@ mutable struct CudaLibMGDescriptor
         try
             cudaLibMgCreateMatrixDesc(desc, size(a, 1), size(a, 2), rowblocks, colblocks, cudaDataType(elta), grid)
         catch e
-            @warn "size(A) = $(size(A)), rowblocks = $rowblocks, colblocks = $colblocks"
+            println("size(A) = $(size(a)), rowblocks = $rowblocks, colblocks = $colblocks")
+            flush(stdout)
             throw(e)
         end
         return new(desc[])

@@ -183,9 +183,15 @@ function mg_gemm!(transA::Char,
     ldc = max(1, stride(C, 2))
     cutransA = cublasop(transA)
     cutransB = cublasop(transB)
-    descA    = CudaLibMGDescriptor(A, grid, rowblocks=div(size(A, 1), dev_rows), colblocks=div(size(A, 2), dev_cols))
-    descB    = CudaLibMGDescriptor(B, grid, rowblocks=div(size(B, 1), dev_rows), colblocks=div(size(B, 2), dev_cols))
-    descC    = CudaLibMGDescriptor(C, grid, rowblocks=div(size(C, 1), dev_rows), colblocks=div(size(C, 2), dev_cols))
+    a_row_blocks = size(A, 1) > 1 ? div(size(A, 1), dev_rows) : 1
+    a_col_blocks = size(A, 2) > 1 ? div(size(A, 2), dev_cols) : 1
+    b_row_blocks = size(B, 1) > 1 ? div(size(B, 1), dev_rows) : 1
+    b_col_blocks = size(B, 2) > 1 ? div(size(B, 2), dev_cols) : 1
+    c_row_blocks = size(C, 1) > 1 ? div(size(C, 1), dev_rows) : 1
+    c_col_blocks = size(C, 2) > 1 ? div(size(C, 2), dev_cols) : 1
+    descA    = CudaLibMGDescriptor(A, grid, rowblocks=a_row_blocks, colblocks=a_col_blocks)
+    descB    = CudaLibMGDescriptor(B, grid, rowblocks=b_row_blocks, colblocks=b_col_blocks)
+    descC    = CudaLibMGDescriptor(C, grid, rowblocks=c_row_blocks, colblocks=c_col_blocks)
     ndevs    = length(devs)
     C_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
     B_ref_arr = Vector{Ptr{Cvoid}}(undef, ndevs)
@@ -211,6 +217,8 @@ function mg_gemm!(transA::Char,
         # set up workspaces and streams
         for (di, dev) in enumerate(devs)
             device!(dev)
+            @show lwork[di]
+            flush(stdout)
             workspace[di] = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di])
             workspace_ref[di] = workspace[di].ptr 
             streams[di]   = CuDefaultStream()
