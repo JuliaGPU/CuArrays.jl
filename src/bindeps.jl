@@ -305,11 +305,7 @@ end
 function use_local_cudalibmg(cuda_dirs)
     path = find_cuda_library("cudalibmg", String[], [v"1"])
     #path === nothing && return false
-<<<<<<< HEAD
     path = joinpath(ENV["HOME"], "software/cublasmg/cudalibmg/lib/libcudalibmg.so")
-=======
-    path = "/home/kshyatt/software/cublasmg/cudalibmg/lib/libcudalibmg.so"
->>>>>>> BlasMG progress?
 
     __libcudalibmg[] = path
     @debug "Using local CUDALIBMG at $(path)"
