@@ -217,8 +217,6 @@ function mg_gemm!(transA::Char,
         # set up workspaces and streams
         for (di, dev) in enumerate(devs)
             device!(dev)
-            @show lwork[di]
-            flush(stdout)
             workspace[di] = CUDAdrv.Mem.alloc(CUDAdrv.Mem.DeviceBuffer, lwork[di])
             workspace_ref[di] = workspace[di].ptr 
             streams[di]   = CuDefaultStream()
