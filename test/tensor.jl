@@ -44,32 +44,43 @@ end
         @testset for (eltyA, eltyC) in eltypes
             # setup
             eltyD = eltyC
-            dmax = 2^div(18,N)
-            dims = rand(2:dmax, N)
-            p = randperm(N)
+            dmax  = 2^div(18,N)
+            dims  = rand(2:dmax, N)
+            p     = randperm(N)
             indsA = collect(('a':'z')[1:N])
             indsC = indsA[p]
             dimsA = dims
             dimsC = dims[p]
-            A = rand(eltyA, dimsA...)
-            dA = CuArray(A)
-            C = rand(eltyC, dimsC...)
-            dC = CuArray(C)
+            A     = rand(eltyA, dimsA...)
+            dA    = CuArray(A)
+            C     = rand(eltyC, dimsC...)
+            dC    = CuArray(C)
+            CUDAdrv.Mem.pin(A)
+            CUDAdrv.Mem.pin(C)
 
             # simple case
-            opA = CUTENSOR.CUTENSOR_OP_IDENTITY
-            opC = CUTENSOR.CUTENSOR_OP_IDENTITY
-            dD = similar(dC, eltyD)
-            opAC = CUTENSOR.CUTENSOR_OP_ADD
-            dD = CUTENSOR.elementwiseBinary!(1, dA, indsA, opA, 1, dC, indsC, opC,
+            opA   = CUTENSOR.CUTENSOR_OP_IDENTITY
+            opC   = CUTENSOR.CUTENSOR_OP_IDENTITY
+            dD    = similar(dC, eltyD)
+            opAC  = CUTENSOR.CUTENSOR_OP_ADD
+            dD    = CUTENSOR.elementwiseBinary!(1, dA, indsA, opA, 1, dC, indsC, opC,
                                                 dD, indsC, opAC)
             D = collect(dD)
             @test D ≈ permutedims(A, p) .+ C
+            Dsimple = similar(C)
+            CUDAdrv.Mem.pin(Dsimple)
+            Dsimple = CUTENSOR.elementwiseBinary!(1, A, indsA, opA, 1, C, indsC, opC,
+                                                  Dsimple, indsC, opAC)
+            @test Dsimple ≈ permutedims(A, p) .+ C
 
             # using integers as indices
             dD = CUTENSOR.elementwiseBinary!(1, dA, 1:N, opA, 1, dC, p, opC, dD, p, opAC)
             D = collect(dD)
             @test D ≈ permutedims(A, p) .+ C
+            Dint = similar(C)
+            CUDAdrv.Mem.pin(Dint)
+            Dint = CUTENSOR.elementwiseBinary!(1, A, 1:N, opA, 1, C, p, opC, Dint, p, opAC)
+            @test Dint ≈ permutedims(A, p) .+ C
 
             # multiplication as binary operator
             opAC = CUTENSOR.CUTENSOR_OP_MUL
@@ -77,6 +88,11 @@ end
                                                 dD, indsC, opAC)
             D = collect(dD)
             @test D ≈ permutedims(A, p) .* C
+            Dmult = similar(C)
+            CUDAdrv.Mem.pin(Dmult)
+            Dmult = CUTENSOR.elementwiseBinary!(1, A, indsA, opA, 1, C, indsC, opC,
+                                                Dmult, indsC, opAC)
+            @test Dmult ≈ permutedims(A, p) .* C
 
             # with non-trivial coefficients and conjugation
             opA = eltyA <: Complex ? CUTENSOR.CUTENSOR_OP_CONJ :
@@ -89,6 +105,11 @@ end
                                                 dD, indsC, opAC)
             D = collect(dD)
             @test D ≈ α .* conj.(permutedims(A, p)) .+ γ .* C
+            Dnontrivial = similar(C)
+            CUDAdrv.Mem.pin(Dnontrivial)
+            Dnontrivial = CUTENSOR.elementwiseBinary!(α, A, indsA, opA, γ, C, indsC, opC,
+                                                Dnontrivial, indsC, opAC)
+            @test Dnontrivial ≈ α .* conj.(permutedims(A, p)) .+ γ .* C
 
             # test in-place, and more complicated unary and binary operations
             opA = eltyA <: Complex ? CUTENSOR.CUTENSOR_OP_IDENTITY :
@@ -161,6 +182,7 @@ end
             dimsA = dims
             dimsC = dims[p]
             A = rand(eltyA, dimsA...)
+            CUDAdrv.Mem.pin(A)
             dA = CuArray(A)
             dC = similar(dA, eltyC, dimsC...)
 
@@ -168,12 +190,20 @@ end
             dC = CUTENSOR.permutation!(one(eltyA), dA, indsA, dC, indsC)
             C  = collect(dC)
             @test C == permutedims(A, p) # exact equality
+            Csimple = similar(A, eltyC, dimsC...)
+            CUDAdrv.Mem.pin(Csimple)
+            Csimple = CUTENSOR.permutation!(one(eltyA), A, indsA, Csimple, indsC)
+            @test Csimple == permutedims(A, p) # exact equality
 
             # with scalar
             α = rand(eltyA)
             dC = CUTENSOR.permutation!(α, dA, indsA, dC, indsC)
             C  = collect(dC)
             @test C ≈ α * permutedims(A, p) # approximate, floating point rounding
+            Cscalar = similar(A, eltyC, dimsC...)
+            CUDAdrv.Mem.pin(Cscalar)
+            Cscalar = CUTENSOR.permutation!(α, A, indsA, Cscalar, indsC)
+            @test Cscalar ≈ α * permutedims(A, p) # approximate, floating point rounding
         end
     end
 end
@@ -224,11 +254,26 @@ end
             D = collect(dD)
             @test D ≈ permutedims(A, pA) .+ permutedims(B, pB) .+ C
 
+            # test with pinned host memory
+            CUDAdrv.Mem.pin(A)
+            CUDAdrv.Mem.pin(B)
+            CUDAdrv.Mem.pin(C)
+            Dc = similar(C)
+            CUDAdrv.Mem.pin(Dc)
+            Dc = CUTENSOR.elementwiseTrinary!(1, A, indsA, opA, 1, B, indsB, opB,
+                                                1, C, indsC, opC, Dc, indsC, opAB, opABC)
+            @test Dc ≈ permutedims(A, pA) .+ permutedims(B, pB) .+ C
+
             # using integers as indices
             dD = CUTENSOR.elementwiseTrinary!(1, dA, ipA, opA, 1, dB, ipB, opB,
                                                 1, dC, 1:N, opC, dD, 1:N, opAB, opABC)
             D = collect(dD)
             @test D ≈ permutedims(A, pA) .+ permutedims(B, pB) .+ C
+            Dd = similar(C)
+            CUDAdrv.Mem.pin(Dd)
+            Dd = CUTENSOR.elementwiseTrinary!(1, A, ipA, opA, 1, B, ipB, opB,
+                                                1, C, 1:N, opC, Dd, 1:N, opAB, opABC)
+            @test Dd ≈ permutedims(A, pA) .+ permutedims(B, pB) .+ C
 
             # multiplication as binary operator
             opAB = CUTENSOR.CUTENSOR_OP_MUL
@@ -237,18 +282,36 @@ end
                                                 1, dC, indsC, opC, dD, indsC, opAB, opABC)
             D = collect(dD)
             @test D ≈ (convert.(eltyD, permutedims(A, pA)) .* convert.(eltyD, permutedims(B, pB))) .+ C
+            De = similar(C)
+            CUDAdrv.Mem.pin(De)
+            De = CUTENSOR.elementwiseTrinary!(1, A, indsA, opA, 1, B, indsB, opB,
+                                                1, C, indsC, opC, De, indsC, opAB, opABC)
+            @test De ≈ (convert.(eltyD, permutedims(A, pA)) .* convert.(eltyD, permutedims(B, pB))) .+ C
+
             opAB = CUTENSOR.CUTENSOR_OP_ADD
             opABC = CUTENSOR.CUTENSOR_OP_MUL
             dD = CUTENSOR.elementwiseTrinary!(1, dA, indsA, opA, 1, dB, indsB, opB,
                                                 1, dC, indsC, opC, dD, indsC, opAB, opABC)
             D = collect(dD)
             @test D ≈ (convert.(eltyD, permutedims(A, pA)) .+ convert.(eltyD, permutedims(B, pB))) .* C
+            Df = similar(C)
+            CUDAdrv.Mem.pin(Df)
+            Df = CUTENSOR.elementwiseTrinary!(1, A, indsA, opA, 1, B, indsB, opB,
+                                                1, C, indsC, opC, Df, indsC, opAB, opABC)
+            @test Df ≈ (convert.(eltyD, permutedims(A, pA)) .+ convert.(eltyD, permutedims(B, pB))) .* C
+
             opAB = CUTENSOR.CUTENSOR_OP_MUL
             opABC = CUTENSOR.CUTENSOR_OP_MUL
             dD = CUTENSOR.elementwiseTrinary!(1, dA, indsA, opA, 1, dB, indsB, opB,
                                                 1, dC, indsC, opC, dD, indsC, opAB, opABC)
             D = collect(dD)
             @test D ≈ convert.(eltyD, permutedims(A, pA)) .*
+                        convert.(eltyD, permutedims(B, pB)) .* C
+            Dg = similar(C)
+            CUDAdrv.Mem.pin(Dg)
+            Dg = CUTENSOR.elementwiseTrinary!(1, A, indsA, opA, 1, B, indsB, opB,
+                                                1, C, indsC, opC, Dg, indsC, opAB, opABC)
+            @test Dg ≈ convert.(eltyD, permutedims(A, pA)) .*
                         convert.(eltyD, permutedims(B, pB)) .* C
 
             # with non-trivial coefficients and conjugation
@@ -263,6 +326,11 @@ end
                                                 γ, dC, indsC, opC, dD, indsC, opAB, opABC)
             D = collect(dD)
             @test D ≈ α .* conj.(permutedims(A, pA)) .+ β .* permutedims(B, pB) .+ γ .* C
+            Dh = similar(C)
+            CUDAdrv.Mem.pin(Dh)
+            Dh = CUTENSOR.elementwiseTrinary!(α, A, indsA, opA, β, B, indsB, opB,
+                                                γ, C, indsC, opC, Dh, indsC, opAB, opABC)
+            @test Dh ≈ α .* conj.(permutedims(A, pA)) .+ β .* permutedims(B, pB) .+ γ .* C
 
             opB = eltyB <: Complex ? CUTENSOR.CUTENSOR_OP_CONJ :
                                     CUTENSOR.CUTENSOR_OP_IDENTITY
@@ -273,6 +341,12 @@ end
             D = collect(dD)
             @test D ≈ α .* conj.(permutedims(A, pA)) .+
                         β .* conj.(permutedims(B, pB)) .+ γ .* C
+            Di = similar(C)
+            CUDAdrv.Mem.pin(Di)
+            Di = CUTENSOR.elementwiseTrinary!(α, A, indsA, opA, β, B, indsB, opB,
+                                                γ, C, indsC, opC, Di, indsC, opAB, opABC)
+            @test Di ≈ α .* conj.(permutedims(A, pA)) .+
+                        β .* conj.(permutedims(B, pB)) .+ γ .* C
 
             opA = CUTENSOR.CUTENSOR_OP_IDENTITY
             opAB = CUTENSOR.CUTENSOR_OP_MUL
@@ -281,6 +355,11 @@ end
                                                 γ, dC, indsC, opC, dD, indsC, opAB, opABC)
             D = collect(dD)
             @test D ≈ α .* permutedims(A, pA) .* β .* conj.(permutedims(B, pB)) .+ γ .* C
+            Dj = similar(C)
+            CUDAdrv.Mem.pin(Dj)
+            Dj = CUTENSOR.elementwiseTrinary!(α, A, indsA, opA, β, B, indsB, opB,
+                                                γ, C, indsC, opC, Dj, indsC, opAB, opABC)
+            @test Dj ≈ α .* permutedims(A, pA) .* β .* conj.(permutedims(B, pB)) .+ γ .* C
 
             # test in-place, and more complicated unary and binary operations
             opA = eltyA <: Complex ? CUTENSOR.CUTENSOR_OP_IDENTITY :
@@ -348,27 +427,43 @@ end
             C = rand(eltyC, (dimsC...,))
             dC = CuArray(C)
             # setup
+            CUDAdrv.Mem.pin(A)
 
             opA = CUTENSOR.CUTENSOR_OP_IDENTITY
             opC = CUTENSOR.CUTENSOR_OP_IDENTITY
             opReduce = CUTENSOR.CUTENSOR_OP_ADD
             # simple case
+            Csimple = copy(C)
+            CUDAdrv.Mem.pin(Csimple)
             dC = CUTENSOR.reduction!(1, dA, indsA, opA, 0, dC, indsC, opC, opReduce)
             C = collect(dC)
             @test reshape(C, (dimsC..., ones(Int,NA-NC)...)) ≈
                 sum(permutedims(A, p); dims = ((NC+1:NA)...,))
+            Csimple = CUTENSOR.reduction!(1, A, indsA, opA, 0, Csimple, indsC, opC, opReduce)
+            @test reshape(Csimple, (dimsC..., ones(Int,NA-NC)...)) ≈
+                sum(permutedims(A, p); dims = ((NC+1:NA)...,))
 
             # using integers as indices
+            Cinteger = copy(C)
+            CUDAdrv.Mem.pin(Cinteger)
             dC = CUTENSOR.reduction!(1, dA, collect(1:NA), opA, 0, dC, p[1:NC], opC, opReduce)
             C = collect(dC)
             @test reshape(C, (dimsC..., ones(Int,NA-NC)...)) ≈
                 sum(permutedims(A, p); dims = ((NC+1:NA)...,))
+            Cinteger = CUTENSOR.reduction!(1, A, collect(1:NA), opA, 0, Cinteger, p[1:NC], opC, opReduce)
+            @test reshape(Cinteger, (dimsC..., ones(Int,NA-NC)...)) ≈
+                sum(permutedims(A, p); dims = ((NC+1:NA)...,))
 
             # multiplication as reduction operator
             opReduce = CUTENSOR.CUTENSOR_OP_MUL
+            Cmult = copy(C)
+            CUDAdrv.Mem.pin(Cmult)
             dC = CUTENSOR.reduction!(1, dA, indsA, opA, 0, dC, indsC, opC, opReduce)
             C = collect(dC)
             @test reshape(C, (dimsC..., ones(Int,NA-NC)...)) ≈
+                prod(permutedims(A, p); dims = ((NC+1:NA)...,)) atol=eps(Float16) rtol=Base.rtoldefault(Float16)
+            Cmult = CUTENSOR.reduction!(1, A, indsA, opA, 0, Cmult, indsC, opC, opReduce)
+            @test reshape(Cmult, (dimsC..., ones(Int,NA-NC)...)) ≈
                 prod(permutedims(A, p); dims = ((NC+1:NA)...,)) atol=eps(Float16) rtol=Base.rtoldefault(Float16)
             # NOTE: this test often yields values close to 0 that do not compare approximately
 
@@ -433,9 +528,11 @@ end
             indsC = [indsoA; indsoB][pC]
 
             A = rand(eltyA, (dimsA...,))
+            CUDAdrv.Mem.pin(A)
             mA = reshape(permutedims(A, ipA), (loA, lc))
             dA = CuArray(A)
             B = rand(eltyB, (dimsB...,))
+            CUDAdrv.Mem.pin(B)
             dB = CuArray(B)
             mB = reshape(permutedims(B, ipB), (lc, loB))
             C = zeros(eltyC, (dimsC...,))
@@ -451,17 +548,28 @@ end
             C = collect(dC)
             mC = reshape(permutedims(C, ipC), (loA, loB))
             @test mC ≈ mA * mB
+            Cpin = zeros(eltyC, (dimsC...,))
+            CUDAdrv.Mem.pin(Cpin)
+            Cpin = CUTENSOR.contraction!(1, A, indsA, opA, B, indsB, opB,
+                                            0, Cpin, indsC, opC, opOut)
+            synchronize()
+            mC = reshape(permutedims(Cpin, ipC), (loA, loB))
+            @test mC ≈ mA * mB
 
             # simple case with plan storage
             opA = CUTENSOR.CUTENSOR_OP_IDENTITY
             opB = CUTENSOR.CUTENSOR_OP_IDENTITY
             opC = CUTENSOR.CUTENSOR_OP_IDENTITY
             opOut = CUTENSOR.CUTENSOR_OP_IDENTITY
-            plan  = CUTENSOR.plan_contraction(dA, indsA, opA, dB, indsB, opB, dC, indsC, opC, opOut)
             dC = CUTENSOR.contraction!(1, dA, indsA, opA, dB, indsB, opB,
-                                        0, dC, indsC, opC, opOut, plan=plan)
+                                        0, dC, indsC, opC, opOut)
             C = collect(dC)
             mC = reshape(permutedims(C, ipC), (loA, loB))
+            @test mC ≈ mA * mB
+            plan  = CUTENSOR.plan_contraction(A, indsA, opA, B, indsB, opB, Cpin, indsC, opC, opOut)
+            Cpin = CUTENSOR.contraction!(1, A, indsA, opA, B, indsB, opB,
+                                        0, Cpin, indsC, opC, opOut, plan=plan)
+            mC = reshape(permutedims(Cpin, ipC), (loA, loB))
             @test mC ≈ mA * mB
 
             # with non-trivial α
@@ -471,10 +579,20 @@ end
             C = collect(dC)
             mC = reshape(permutedims(C, ipC), (loA, loB))
             @test mC ≈ α * mA * mB
+            plan = CUTENSOR.plan_contraction(A, indsA, opA, B, indsB, opB, Cpin, indsC, opC, opOut)
+            Cpin = CUTENSOR.contraction!(α, A, indsA, opA, B, indsB, opB,
+                                        0, Cpin, indsC, opC, opOut, plan=plan)
+            synchronize()
+            mC = reshape(permutedims(Cpin, ipC), (loA, loB))
+            @test mC ≈ α * mA * mB
 
             # with non-trivial β
             C = rand(eltyC, (dimsC...,))
             dC = CuArray(C)
+            hC = copy(C)
+            Cnontrivial = similar(C)
+            CUDAdrv.Mem.pin(hC)
+            CUDAdrv.Mem.pin(Cnontrivial)
             α = rand(eltyC)
             β = rand(eltyC)
             copyto!(dC, C)
@@ -483,6 +601,11 @@ end
             D = collect(dD)
             mC = reshape(permutedims(C, ipC), (loA, loB))
             mD = reshape(permutedims(D, ipC), (loA, loB))
+            @test mD ≈ α * mA * mB + β * mC
+            Cnontrivial = CUTENSOR.contraction!(α, A, indsA, opA, B, indsB, opB,
+                                        β, hC, indsC, opC, opOut)
+            synchronize()
+            mD = reshape(permutedims(Cnontrivial, ipC), (loA, loB))
             @test mD ≈ α * mA * mB + β * mC
 
             # with CuTensor objects
