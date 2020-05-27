@@ -1,4 +1,4 @@
-# CuArrays
+# ~CuArrays.jl~: DEPRECATED, use [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) instead!
 
 | **Documentation**                                                       | **Build Status**                                              |
 |:-----------------------------------------------------------------------:|:-------------------------------------------------------------:|
